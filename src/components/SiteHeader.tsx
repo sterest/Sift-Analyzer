@@ -37,7 +37,7 @@ async function AccountNav() {
   return (
     <>
       <Link href="/app">Your datasets</Link>
-      <span className="who" title={email}>{email}</span>
+      <Link href="/app/account" className="who" title={`Account: ${email}`}>{email}</Link>
       <form action={signOut}><button className="btn btn-quiet" type="submit">Sign out</button></form>
     </>
   );

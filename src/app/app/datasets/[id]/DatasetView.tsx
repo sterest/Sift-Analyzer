@@ -5,6 +5,7 @@ import Link from "next/link";
 import { defaultConfig, type DashConfig } from "@/components/Dashboard";
 import { Workspace } from "@/components/Workspace";
 import { buildDataset, type Dataset } from "@/lib/analyze";
+import { saveBlob } from "@/lib/download";
 import { parseFile } from "@/lib/parse-file";
 import { createClient } from "@/lib/supabase/client";
 import { DATASET_BUCKET } from "@/lib/supabase/config";
@@ -33,6 +34,7 @@ const same = (a: DashConfig, b: DashConfig) => JSON.stringify(a) === JSON.string
 
 export function DatasetView({ dataset, initialViews }: { dataset: DatasetRecord; initialViews: DashboardRecord[] }) {
   const [ds, setDs] = useState<Dataset | null>(null);
+  const [file, setFile] = useState<Blob | null>(null);
   const [loadError, setLoadError] = useState("");
   const [config, setConfig] = useState<DashConfig | null>(null);
   const [views, setViews] = useState(initialViews);
@@ -56,6 +58,7 @@ export function DatasetView({ dataset, initialViews }: { dataset: DatasetRecord;
         const table = await parseFile(data, `${dataset.name}.${dataset.file_type}`);
         const built = buildDataset(dataset.name, table.headers, table.rows);
         if (cancelled) return;
+        setFile(data);
         setDs(built);
         setConfig(normalize(initialViews[0]?.config, built));
       } catch (e) {
@@ -111,6 +114,12 @@ export function DatasetView({ dataset, initialViews }: { dataset: DatasetRecord;
     <div className="pagehead row">
       <Link href="/app" className="back">← Your datasets</Link>
       <div className="actions">
+        {file && !confirmDelete && (
+          <button className="btn" type="button" onClick={() => {
+            const ext = "." + dataset.file_type;
+            saveBlob(file, dataset.name.toLowerCase().endsWith(ext) ? dataset.name : dataset.name + ext);
+          }}>Download original file</button>
+        )}
         {confirmDelete ? (
           <>
             <span className="note">Delete this file and its saved views? This can&apos;t be undone.</span>

@@ -51,6 +51,14 @@ Open http://localhost:3000. The home page and **Try it** work straight away. Acc
 3. In Supabase **URL Configuration**, change **Site URL** to the live address and add `https://<your-domain>/**` to **Redirect URLs**.
 4. Supabase's built-in email sender is rate-limited and meant for testing. Before real users sign up, set up your own SMTP provider under **Authentication → Emails**.
 
+## Privacy policy
+
+The policy lives at `/privacy` (`src/app/privacy/page.tsx`). The operator's details it needs (name, address, contact email, country, regulator, Supabase region, effective date) are in `src/lib/legal.ts`. Until every placeholder there is filled in, the page shows a draft notice. Have the final text reviewed by someone who knows the data protection law that applies to you.
+
+If you change what the app collects or who it shares data with (analytics, a new email provider, the Claude API), update the policy in the same change.
+
+People can download a summary of their data and delete their account at `/app/account`. Deleting an account relies on the `delete_my_account()` function in `supabase/schema.sql`. If you ran the schema before that function was added, run the file again; it is safe to re-run.
+
 ## How data is protected
 
 - Uploaded files go to a private bucket, in a folder named after the owner's user id. Storage policies only let that user read, upload or delete there.

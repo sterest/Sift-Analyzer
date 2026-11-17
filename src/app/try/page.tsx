@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TryWorkspace } from "./TryWorkspace";
 
@@ -11,6 +12,7 @@ export default function TryPage() {
       <main className="wrap page">
         <TryWorkspace />
       </main>
+      <SiteFooter />
     </>
   );
 }

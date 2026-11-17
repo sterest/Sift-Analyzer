@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { SetupNotice } from "@/components/SetupNotice";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -16,6 +17,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <SetupNotice />
         )}
       </main>
+      <SiteFooter />
     </>
   );
 }

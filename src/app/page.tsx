@@ -1,4 +1,7 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import { DeletedNotice } from "./DeletedNotice";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 
 const FEATURES = [
@@ -21,6 +24,7 @@ export default function Home() {
     <>
       <SiteHeader />
       <main>
+        <Suspense fallback={null}><DeletedNotice /></Suspense>
         <section className="hero">
           <div className="wrap hero-in">
             <h1>Open a spreadsheet. See what&apos;s in it.</h1>
@@ -42,10 +46,7 @@ export default function Home() {
           ))}
         </section>
       </main>
-      <footer className="wrap sitefoot">
-        <span>Sift</span>
-        <span>Files you try without an account are read in your browser and never uploaded.</span>
-      </footer>
+      <SiteFooter />
     </>
   );
 }

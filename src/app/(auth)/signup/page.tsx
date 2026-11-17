@@ -14,6 +14,10 @@ export default function SignupPage() {
         { name: "email", label: "Email address", autoComplete: "email" },
         { name: "password", label: "Password", autoComplete: "new-password", hint: "At least 8 characters." },
       ]} />
+      <p className="note">
+        We use your email address to run your account and store your files privately. Read the <Link href="/privacy">privacy policy</Link> for
+        what we collect and how to delete it.
+      </p>
       <p className="authlinks"><span>Already have an account? <Link href="/login">Sign in</Link></span></p>
     </>
   );

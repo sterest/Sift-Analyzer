@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { SetupNotice } from "@/components/SetupNotice";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -26,6 +27,7 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
       ) : (
         <main className="wrap auth"><SetupNotice /></main>
       )}
+      <SiteFooter />
     </>
   );
 }
