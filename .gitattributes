@@ -1,0 +1,4 @@
+# Store text files with LF line endings so Windows and the Linux build servers agree.
+* text=auto eol=lf
+*.ico binary
+*.png binary

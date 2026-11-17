@@ -1,0 +1,816 @@
+<title>Sift Data Analyzer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working column. Load bar, then findings, then one large chart you steer, then per-column profiles, correlations and the raw rows. */
+:root {
+  --bg: #f1f3f6; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #77756f;
+  --line: #e1e0d9; --axis: #c3c2b7; --accent: #2a78d6; --on-accent: #ffffff;
+  --wash: rgba(42,120,214,.10); --pos: #2a78d6; --neg: #e34948; --mid: #f0efec;
+  --ink-on-fill: #0b0b0b; --warn-bg: #fdecc8; --warn-ink: #5c3d00;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #9a988f;
+    --line: #2c2c2a; --axis: #45453f; --accent: #3987e5; --on-accent: #ffffff;
+    --wash: rgba(57,135,229,.18); --pos: #3987e5; --neg: #e66767; --mid: #383835;
+    --ink-on-fill: #0b0b0b; --warn-bg: #4a3505; --warn-ink: #fbd98a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #9a988f;
+  --line: #2c2c2a; --axis: #45453f; --accent: #3987e5; --on-accent: #ffffff;
+  --wash: rgba(57,135,229,.18); --pos: #3987e5; --neg: #e66767; --mid: #383835;
+  --ink-on-fill: #0b0b0b; --warn-bg: #4a3505; --warn-ink: #fbd98a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 28px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; font-weight: 600; }
+h1 { font-size: 22px; letter-spacing: -.01em; }
+h2 { font-size: 17px; }
+h3 { font-size: 14px; }
+p { margin: 0; }
+.muted { color: var(--ink2); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* top bar */
+.top { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
+.brand { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.brand p { color: var(--ink2); font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { font: inherit; font-weight: 500; font-size: 14px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--axis); background: var(--surface); color: var(--ink); }
+.btn:hover { background: var(--wash); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+.btn:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, th button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+#pastebox { display: flex; flex-direction: column; gap: 8px; }
+#pastebox textarea { width: 100%; min-height: 120px; font-family: var(--mono); font-size: 13px; padding: 10px;
+  border: 1px solid var(--axis); border-radius: 8px; background: var(--surface); color: var(--ink); resize: vertical; }
+.error { background: var(--warn-bg); color: var(--warn-ink); padding: 10px 14px; border-radius: 8px; font-size: 14px; }
+
+/* dataset line */
+.dataset { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: -12px; }
+.tabs a { padding: 8px 14px; text-decoration: none; color: var(--ink2); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0; }
+.tabs a:hover { color: var(--ink); background: var(--wash); }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.view { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+#viewDash { gap: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.tile { display: flex; flex-direction: column; gap: 2px; }
+.tile .k { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
+.tile .v { font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1.15; overflow-wrap: anywhere; }
+.tile .s { font-size: 12px; color: var(--ink2); }
+.dgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.dcard { display: flex; flex-direction: column; gap: 10px; }
+.dcard.wide { grid-column: 1 / -1; }
+@media (max-width: 760px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
+.emptymsg { color: var(--ink2); padding: 24px 0; text-align: center; }
+.dataset .name { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
+.chip { display: inline-block; font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 99px;
+  border: 1px solid var(--axis); color: var(--ink2); white-space: nowrap; }
+.chip.example { background: var(--warn-bg); color: var(--warn-ink); border-color: transparent; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 18px; color: var(--ink2); font-size: 14px; }
+.facts b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
+
+section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sechead { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
+.sechead p { color: var(--ink2); font-size: 13px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+
+/* findings */
+#findings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+#findings li { display: grid; grid-template-columns: 108px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); align-items: baseline; }
+#findings li:first-child { border-top: 0; padding-top: 0; }
+#findings li:last-child { padding-bottom: 0; }
+#findings .kind { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+#findings b { font-weight: 600; }
+@media (max-width: 520px) { #findings li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* explore */
+.controls { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.controls label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); font-weight: 500; flex: 1 1 150px; max-width: 260px; min-width: 0; }
+select, input[type="search"] { font: inherit; font-size: 14px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--axis);
+  background: var(--surface); color: var(--ink); width: 100%; min-width: 0; }
+#chartTitle { margin-top: 4px; }
+.note { color: var(--ink2); font-size: 13px; }
+.chart { width: 100%; min-width: 0; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+svg .grid { stroke: var(--line); stroke-width: 1; }
+svg .base { stroke: var(--axis); stroke-width: 1; }
+svg .mark { fill: var(--accent); }
+svg .mark:hover { filter: brightness(1.2); }
+svg .dot { fill: var(--accent); fill-opacity: .55; stroke: var(--surface); stroke-width: 1; }
+svg .dot:hover { fill-opacity: 1; }
+svg .lineseries { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+svg .area { fill: var(--accent); fill-opacity: .10; }
+svg .trend { stroke: var(--ink2); stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+svg .hit { fill: transparent; }
+svg .pt circle { fill: var(--accent); stroke: var(--surface); stroke-width: 2; opacity: 0; }
+svg .pt line { stroke: var(--axis); stroke-width: 1; opacity: 0; }
+svg .pt:hover circle, svg .pt:hover line { opacity: 1; }
+.hbars { display: grid; grid-template-columns: minmax(70px, max-content) 1fr max-content; gap: 6px 10px; align-items: center; }
+.hbars .lab { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.hbars .track { height: 18px; min-width: 40px; }
+.hbars .fill { height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+.hbars .fill:hover { filter: brightness(1.2); }
+.hbars .val { font-family: var(--mono); font-size: 12px; color: var(--ink2); text-align: right; }
+@media (max-width: 520px) { .hbars .lab { max-width: 110px; } }
+
+/* column profiles */
+.cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.col { display: flex; flex-direction: column; gap: 10px; }
+.col header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.col header h3 { overflow-wrap: anywhere; min-width: 0; }
+.col dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 13px; }
+.col dt { color: var(--ink2); }
+.col dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 46px; border-bottom: 1px solid var(--axis); }
+.spark i { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 1px; }
+.spark i:hover { filter: brightness(1.2); }
+.sparkrange { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.tops { display: grid; grid-template-columns: minmax(0, 1fr) 70px auto; gap: 4px 8px; align-items: center; font-size: 12px; }
+.tops span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tops .t { height: 8px; }
+.tops .t i { display: block; height: 100%; background: var(--accent); border-radius: 0 3px 3px 0; min-width: 2px; }
+.tops .n { font-family: var(--mono); color: var(--ink2); text-align: right; }
+
+/* correlations + table */
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 13px; }
+#corr { border-collapse: separate; border-spacing: 2px; }
+#corr th { font-weight: 500; color: var(--ink2); font-size: 12px; text-align: right; padding: 4px 8px; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+#corr thead th { text-align: center; }
+#corr td { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: center; padding: 8px 6px; min-width: 56px; border-radius: 4px; color: var(--ink); }
+#corr td.strong { color: var(--ink-on-fill); font-weight: 500; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); margin-top: 10px; flex-wrap: wrap; }
+.legend .ramp { width: 140px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, var(--neg), var(--mid), var(--pos)); }
+.tablebar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.tablebar input { max-width: 280px; }
+#rows { width: 100%; }
+#rows th { text-align: left; border-bottom: 1px solid var(--axis); padding: 0; white-space: nowrap; }
+#rows th button { all: unset; cursor: pointer; display: block; padding: 6px 10px; font-weight: 600; font-size: 12px; color: var(--ink2); }
+#rows th button:hover { color: var(--ink); }
+#rows td { padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+#rows td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+#rows td.empty { color: var(--muted); }
+#rows tbody tr:hover { background: var(--wash); }
+
+#tip { position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--surface); font-size: 12px;
+  font-family: var(--mono); padding: 6px 9px; border-radius: 6px; white-space: pre-line; max-width: 260px; line-height: 1.45; }
+body.dragging .wrap { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 12px; }
+footer { color: var(--ink2); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <h1>Sift</h1>
+      <p>Load a table and get its shape, its problems and its patterns.</p>
+    </div>
+    <div class="actions">
+      <label class="btn primary" for="file">Open a file</label>
+      <input class="visually-hidden" type="file" id="file" accept=".csv,.tsv,.txt,.json,.xlsx,.xls">
+      <button class="btn" id="pasteToggle" type="button" aria-expanded="false">Paste data</button>
+      <button class="btn" id="sampleBtn" type="button" hidden>Load the example</button>
+    </div>
+  </div>
+
+  <div id="pastebox" hidden>
+    <textarea id="pasteArea" placeholder="Paste CSV, tab-separated cells copied from a spreadsheet, or a JSON array of objects. The first row is read as column names." aria-label="Pasted data"></textarea>
+    <div class="actions"><button class="btn primary" id="pasteGo" type="button">Analyze pasted data</button></div>
+  </div>
+  <div class="error" id="error" role="alert" hidden></div>
+
+  <div class="dataset">
+    <span class="name" id="dsName"></span>
+    <span class="chip example" id="dsExample">Example data</span>
+    <div class="facts" id="facts"></div>
+  </div>
+
+  <nav class="tabs" aria-label="Views">
+    <a href="#dashboard" data-view="dashboard">Dashboard</a>
+    <a href="#analysis" data-view="analysis">Analysis</a>
+  </nav>
+
+  <div class="view" id="viewDash">
+    <div class="controls" id="dashFilters"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="dgrid" id="dgrid"></div>
+  </div>
+
+  <div class="view" id="viewAna" hidden>
+  <section aria-labelledby="hFind">
+    <div class="sechead"><h2 id="hFind">Findings</h2><p>Written from the numbers below. Check anything you plan to act on.</p></div>
+    <div class="panel"><ul id="findings"></ul></div>
+  </section>
+
+  <section aria-labelledby="hExp">
+    <div class="sechead"><h2 id="hExp">Explore</h2><p>Pick what to compare. The chart type follows the column types.</p></div>
+    <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+      <div class="controls">
+        <label for="selX">Look at<select id="selX"></select></label>
+        <label for="selY">Measure<select id="selY"></select></label>
+        <label for="selAgg" id="aggWrap">Summarize as<select id="selAgg">
+          <option value="sum">Total</option><option value="mean">Average</option><option value="median">Median</option>
+          <option value="min">Minimum</option><option value="max">Maximum</option></select></label>
+      </div>
+      <h3 id="chartTitle"></h3>
+      <div id="chart" class="chart"></div>
+      <p id="chartNote" class="note"></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="hCols">
+    <div class="sechead"><h2 id="hCols">Columns</h2><p>Type, completeness and spread of each column.</p></div>
+    <div class="cols" id="cols"></div>
+  </section>
+
+  <section aria-labelledby="hCorr" id="corrSec">
+    <div class="sechead"><h2 id="hCorr">Correlations</h2><p>Pearson r between numeric columns. Near 0 means no straight-line link.</p></div>
+    <div class="panel">
+      <div class="scroll"><table id="corr"></table></div>
+      <div class="legend"><span>−1 opposite</span><span class="ramp"></span><span>+1 together</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="hRows">
+    <div class="sechead"><h2 id="hRows">Rows</h2><p id="rowCount"></p></div>
+    <div class="panel">
+      <div class="tablebar">
+        <input type="search" id="q" placeholder="Filter rows by any text" aria-label="Filter rows">
+        <span class="muted" style="font-size:13px">Click a column name to sort.</span>
+      </div>
+      <div class="scroll"><table id="rows"></table></div>
+    </div>
+  </section>
+  </div>
+
+  <footer>Your file is read in this browser tab and is not uploaded anywhere. Accepts CSV, TSV, JSON and Excel files; you can also drop a file anywhere on the page.</footer>
+</div>
+<div id="tip" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function () {
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const BLANK = new Set(['', 'na', 'n/a', 'nan', 'null', 'none', 'undefined', '-', '#n/a']);
+const state = { name: '', example: true, headers: [], rows: [], cols: [], sort: null, q: '', dash: null };
+let T = {}, view = location.hash === '#analysis' ? 'analysis' : 'dashboard';
+
+/* ---------- formatting ---------- */
+function fmt(n) {
+  if (n == null || !isFinite(n)) return '–';
+  const a = Math.abs(n);
+  if (a >= 1e6) return n.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 });
+  if (Number.isInteger(n)) return n.toLocaleString('en-US');
+  if (a >= 100) return n.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  if (a >= 1) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return n.toLocaleString('en-US', { maximumSignificantDigits: 3 });
+}
+const pct = x => (x * 100).toLocaleString('en-US', { maximumFractionDigits: x < 0.1 ? 1 : 0 }) + '%';
+const fmtDate = t => new Date(t).toISOString().slice(0, 10);
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/* ---------- parsing ---------- */
+function parseNum(s) {
+  let t = String(s).trim().replace(/^[$€£¥]/, '').replace(/,/g, '').replace(/%$/, '');
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t)) return NaN;
+  return Number(t);
+}
+function parseDate(s) {
+  const t = String(s).trim();
+  if (!(/^\d{4}-\d{1,2}(-\d{1,2})?([T ].*)?$/.test(t) || /^\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4}/.test(t) || /^[A-Za-z]{3,9}\.? \d{1,2},? \d{4}$/.test(t) || /^\d{1,2} [A-Za-z]{3,9} \d{4}$/.test(t))) return NaN;
+  const v = Date.parse(/^\d{4}-\d{1,2}(-\d{1,2})?$/.test(t) ? t + (t.length <= 7 ? '-01' : '') + 'T00:00:00Z' : t);
+  return v;
+}
+const isBlank = v => v == null || BLANK.has(String(v).trim().toLowerCase());
+
+function quantile(sorted, p) {
+  if (!sorted.length) return NaN;
+  const i = (sorted.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+}
+function agg(arr, kind) {
+  if (!arr.length) return NaN;
+  if (kind === 'sum') return arr.reduce((a, b) => a + b, 0);
+  if (kind === 'mean') return arr.reduce((a, b) => a + b, 0) / arr.length;
+  if (kind === 'min') return Math.min.apply(null, arr);
+  if (kind === 'max') return Math.max.apply(null, arr);
+  return quantile(arr.slice().sort((a, b) => a - b), 0.5);
+}
+function pearson(a, b) {
+  let n = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i];
+    if (x == null || y == null) continue;
+    n++; sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y;
+  }
+  if (n < 3) return NaN;
+  const d = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
+  return d ? (n * sxy - sx * sy) / d : NaN;
+}
+
+function analyze(headers, rows, types) {
+  const n = rows.length;
+  return headers.map((h, hi) => {
+    const raw = rows.map(r => r[h]);
+    const present = raw.filter(v => !isBlank(v));
+    const m = present.length;
+    let nNum = 0, nDate = 0;
+    for (const v of present) { if (!isNaN(parseNum(v))) nNum++; else if (!isNaN(parseDate(v))) nDate++; }
+    let type = 'text';
+    if (m && nNum / m >= 0.9) type = 'number';
+    else if (m && nDate / m >= 0.9) type = 'date';
+    if (types) type = types[hi];
+    const values = raw.map(v => {
+      if (isBlank(v)) return null;
+      if (type === 'number') { const x = parseNum(v); return isNaN(x) ? null : x; }
+      if (type === 'date') { const x = parseDate(v); return isNaN(x) ? null : x; }
+      return String(v).trim();
+    });
+    const ok = values.filter(v => v != null);
+    const col = { name: h, type, values, n, count: ok.length, missing: n - ok.length, unique: new Set(ok).size };
+    if (type === 'number' || type === 'date') {
+      const s = ok.slice().sort((a, b) => a - b);
+      col.sorted = s; col.min = s[0]; col.max = s[s.length - 1];
+      col.q1 = quantile(s, 0.25); col.median = quantile(s, 0.5); col.q3 = quantile(s, 0.75);
+    }
+    if (type === 'number') {
+      const s = col.sorted, mean = s.reduce((a, b) => a + b, 0) / (s.length || 1);
+      const sd = Math.sqrt(s.reduce((a, b) => a + (b - mean) * (b - mean), 0) / Math.max(1, s.length - 1));
+      const iqr = col.q3 - col.q1, hiF = col.q3 + 1.5 * iqr, loF = col.q1 - 1.5 * iqr;
+      col.mean = mean; col.sd = sd; col.hiFence = hiF; col.loFence = loF;
+      col.outHi = iqr > 0 ? s.filter(v => v > hiF).length : 0;
+      col.outLo = iqr > 0 ? s.filter(v => v < loF).length : 0;
+      col.skew = sd ? s.reduce((a, b) => a + Math.pow((b - mean) / sd, 3), 0) / s.length : 0;
+      const allInt = s.every(Number.isInteger);
+      col.idLike = allInt && col.unique === col.count && col.count > 10 && /(^|[_\s-])(id|no|num|number|index|key)$|^id|^#$/i.test(h.trim());
+    } else if (type === 'text') {
+      const counts = new Map();
+      for (const v of ok) counts.set(v, (counts.get(v) || 0) + 1);
+      col.top = Array.from(counts).sort((a, b) => b[1] - a[1]);
+      col.idLike = col.unique === col.count && col.count > 10;
+      col.categorical = !col.idLike && col.unique <= Math.max(30, n * 0.2);
+    }
+    return col;
+  });
+}
+
+/* ---------- findings ---------- */
+function findings() {
+  const { cols, rows } = state, n = rows.length, out = [];
+  const add = (kind, html) => out.push({ kind, html });
+  const b = s => '<b>' + esc(s) + '</b>';
+  const cells = n * cols.length, miss = cols.reduce((a, c) => a + c.missing, 0);
+  if (miss === 0) add('Quality', 'Every cell is filled in. No missing values.');
+  else {
+    const worst = cols.slice().sort((x, y) => y.missing - x.missing).filter(c => c.missing).slice(0, 2)
+      .map(c => b(c.name) + ' (' + fmt(c.missing) + ', ' + pct(c.missing / n) + ' of rows)').join(' and ');
+    add('Quality', pct(miss / cells) + ' of cells are empty. Most of the gaps are in ' + worst + '.');
+  }
+  if (state.dupes) add('Quality', fmt(state.dupes) + ' row' + (state.dupes > 1 ? 's are exact copies' : ' is an exact copy') + ' of an earlier row. Remove them before totalling anything.');
+  const ids = cols.filter(c => c.idLike);
+  if (ids.length) add('Quality', ids.map(c => b(c.name)).join(', ') + (ids.length > 1 ? ' are' : ' is') + ' different on every row, so ' + (ids.length > 1 ? 'they look like identifiers and are' : 'it looks like an identifier and is') + ' left out of the statistics.');
+  const constant = cols.filter(c => c.unique === 1 && n > 1);
+  if (constant.length) add('Quality', constant.map(c => b(c.name)).join(', ') + (constant.length > 1 ? ' hold' : ' holds') + ' the same value on every row and cannot explain anything.');
+
+  const nums = cols.filter(c => c.type === 'number' && !c.idLike && c.unique > 1);
+  const pairs = [];
+  for (let i = 0; i < nums.length; i++) for (let j = i + 1; j < nums.length; j++) {
+    const r = pearson(nums[i].values, nums[j].values);
+    if (isFinite(r)) pairs.push({ a: nums[i], b: nums[j], r });
+  }
+  pairs.sort((x, y) => Math.abs(y.r) - Math.abs(x.r));
+  const strong = pairs.filter(p => Math.abs(p.r) >= 0.5).slice(0, 3);
+  for (const p of strong) add('Relationship', b(p.a.name) + ' and ' + b(p.b.name) + (p.r > 0 ? ' rise together' : ' move in opposite directions') + ' (r = ' + p.r.toFixed(2) + (Math.abs(p.r) >= 0.8 ? ', a strong link' : ', a moderate link') + ').');
+  if (nums.length > 1 && !strong.length) add('Relationship', 'No two numeric columns move together strongly. The largest correlation is ' + (pairs[0] ? pairs[0].r.toFixed(2) : '0') + '.');
+
+  // which category separates which number the most (eta squared)
+  let best = null;
+  for (const c of cols.filter(c => c.type === 'text' && c.categorical && c.unique >= 2 && c.unique <= 12)) for (const m of nums) {
+    const g = new Map(); let tot = 0, cnt = 0;
+    for (let i = 0; i < n; i++) { const k = c.values[i], v = m.values[i]; if (k == null || v == null) continue; if (!g.has(k)) g.set(k, []); g.get(k).push(v); tot += v; cnt++; }
+    if (cnt < 10) continue;
+    const gm = tot / cnt; let ssb = 0, sst = 0; const means = [];
+    for (const [k, arr] of g) { const mu = arr.reduce((a, x) => a + x, 0) / arr.length; ssb += arr.length * (mu - gm) * (mu - gm); for (const x of arr) sst += (x - gm) * (x - gm); if (arr.length >= 3) means.push([k, mu]); }
+    const eta = sst ? ssb / sst : 0;
+    if (means.length >= 2 && (!best || eta > best.eta)) best = { c, m, eta, means: means.sort((a, x) => x[1] - a[1]) };
+  }
+  if (best && best.eta >= 0.08) {
+    const hi = best.means[0], lo = best.means[best.means.length - 1];
+    add('Groups', b(best.m.name) + ' differs most by ' + b(best.c.name) + ': ' + esc(hi[0]) + ' averages ' + fmt(hi[1]) + ', ' + esc(lo[0]) + ' averages ' + fmt(lo[1]) + '. ' + b(best.c.name) + ' accounts for ' + pct(best.eta) + ' of the variation.');
+  }
+  for (const c of cols.filter(c => c.type === 'text' && c.categorical && c.unique >= 2).slice(0, 8)) {
+    const share = c.top[0][1] / c.count;
+    if (share >= 0.5) add('Groups', 'In ' + b(c.name) + ', ' + b(c.top[0][0]) + ' makes up ' + pct(share) + ' of rows.');
+  }
+  const outs = nums.filter(c => c.outHi + c.outLo > 0).sort((x, y) => (y.outHi + y.outLo) - (x.outHi + x.outLo)).filter(c => c.unique > 8).slice(0, 2);
+  for (const c of outs) {
+    const parts = [];
+    if (c.outHi) parts.push(fmt(c.outHi) + ' unusually high value' + (c.outHi > 1 ? 's' : '') + ' (above ' + fmt(c.hiFence) + ', up to ' + fmt(c.max) + ')');
+    if (c.outLo) parts.push(fmt(c.outLo) + ' unusually low value' + (c.outLo > 1 ? 's' : '') + ' (below ' + fmt(c.loFence) + ', down to ' + fmt(c.min) + ')');
+    add('Distribution', b(c.name) + ' has ' + parts.join(' and ') + '.');
+  }
+  for (const c of nums.filter(c => Math.abs(c.skew) >= 1 && !outs.includes(c)).slice(0, 1))
+    add('Distribution', b(c.name) + ' is lopsided: most values are ' + (c.skew > 0 ? 'low with a long tail of high ones' : 'high with a long tail of low ones') + ' (median ' + fmt(c.median) + ', average ' + fmt(c.mean) + '). The median is the safer summary.');
+  const d = cols.find(c => c.type === 'date' && c.count);
+  if (d) add('Coverage', b(d.name) + ' runs from ' + fmtDate(d.min) + ' to ' + fmtDate(d.max) + ' (' + fmt(Math.round((d.max - d.min) / 864e5) + 1) + ' days).');
+  return out;
+}
+
+/* ---------- chart helpers ---------- */
+function niceTicks(min, max, count) {
+  if (min === max) { min -= 1; max += 1; }
+  const raw = (max - min) / Math.max(1, count), p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  const t = [];
+  for (let v = Math.floor(min / step) * step; v <= max + step * 0.999; v += step) t.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toPrecision(12));
+  return t;
+}
+const scale = (d0, d1, r0, r1) => v => r0 + (v - d0) / ((d1 - d0) || 1) * (r1 - r0);
+function barPath(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h);
+  return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
+}
+function plotBox(yTicks) {
+  const W = Math.max(280, T.chart.clientWidth || 700), H = T.h || (W < 480 ? 260 : 340);
+  const left = Math.max(34, Math.max.apply(null, yTicks.map(t => fmt(t).length)) * 7 + 12);
+  return { W, H, l: left, r: 14, t: 10, b: 30 };
+}
+function yAxis(box, ticks, y) {
+  return ticks.map(t => '<line class="' + (t === ticks[0] ? 'base' : 'grid') + '" x1="' + box.l + '" x2="' + (box.W - box.r) + '" y1="' + y(t) + '" y2="' + y(t) + '"/><text x="' + (box.l - 6) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + fmt(t) + '</text>').join('');
+}
+const svgOpen = (box, label) => '<svg viewBox="0 0 ' + box.W + ' ' + box.H + '" role="img" aria-label="' + esc(label) + '">';
+
+function drawHistogram(col, title) {
+  const s = col.sorted, k = Math.min(24, Math.max(6, Math.ceil(Math.log2(s.length || 1)) + 1));
+  const lo = col.min, hi = col.max === col.min ? col.min + 1 : col.max, w = (hi - lo) / k;
+  const bins = new Array(k).fill(0);
+  for (const v of s) bins[Math.min(k - 1, Math.floor((v - lo) / w))]++;
+  const yT = niceTicks(0, Math.max.apply(null, bins), 4), box = plotBox(yT);
+  const x = scale(lo, hi, box.l, box.W - box.r), y = scale(yT[0], yT[yT.length - 1], box.H - box.b, box.t);
+  let h = svgOpen(box, title) + yAxis(box, yT, y);
+  bins.forEach((c, i) => {
+    const x0 = x(lo + i * w) + 1, bw = Math.max(1, x(lo + (i + 1) * w) - x(lo + i * w) - 2);
+    if (c) h += '<path class="mark" d="' + barPath(x0, y(c), bw, y(0) - y(c), 4) + '" data-tip="' + esc(fmt(lo + i * w) + ' to ' + fmt(lo + (i + 1) * w) + '\n' + fmt(c) + ' rows') + '"/>';
+  });
+  const xt = niceTicks(lo, hi, box.W < 480 ? 3 : 6).filter(t => t >= lo && t <= hi);
+  h += xt.map(t => '<text x="' + x(t) + '" y="' + (box.H - 10) + '" text-anchor="middle">' + fmt(t) + '</text>').join('');
+  T.chart.innerHTML = h + '</svg>';
+  T.note.textContent = 'Half of the values fall between ' + fmt(col.q1) + ' and ' + fmt(col.q3) + '. Median ' + fmt(col.median) + ', average ' + fmt(col.mean) + '.';
+}
+
+function drawScatter(cx, cy, title) {
+  let pts = [];
+  for (let i = 0; i < cx.values.length; i++) if (cx.values[i] != null && cy.values[i] != null) pts.push([cx.values[i], cy.values[i]]);
+  const total = pts.length, r = pearson(cx.values, cy.values);
+  let mx = 0, my = 0; for (const p of pts) { mx += p[0]; my += p[1]; } mx /= total || 1; my /= total || 1;
+  let sxy = 0, sxx = 0; for (const p of pts) { sxy += (p[0] - mx) * (p[1] - my); sxx += (p[0] - mx) * (p[0] - mx); }
+  const slope = sxx ? sxy / sxx : 0, icpt = my - slope * mx;
+  if (pts.length > 1500) { const step = pts.length / 1500; pts = Array.from({ length: 1500 }, (_, i) => pts[Math.floor(i * step)]); }
+  const yT = niceTicks(cy.min, cy.max, 5), box = plotBox(yT), xT = niceTicks(cx.min, cx.max, box.W < 480 ? 3 : 6);
+  const x = scale(xT[0], xT[xT.length - 1], box.l, box.W - box.r), y = scale(yT[0], yT[yT.length - 1], box.H - box.b, box.t);
+  let h = svgOpen(box, title) + yAxis(box, yT, y);
+  h += xT.map(t => '<text x="' + x(t) + '" y="' + (box.H - 10) + '" text-anchor="middle">' + fmt(t) + '</text>').join('');
+  h += pts.map(p => '<circle class="dot" cx="' + x(p[0]).toFixed(1) + '" cy="' + y(p[1]).toFixed(1) + '" r="4" data-tip="' + esc(cx.name + ': ' + fmt(p[0]) + '\n' + cy.name + ': ' + fmt(p[1])) + '"/>').join('');
+  if (isFinite(r) && total > 2) {
+    const clampY = v => Math.max(yT[0], Math.min(yT[yT.length - 1], v));
+    h += '<line class="trend" x1="' + x(cx.min) + '" y1="' + y(clampY(icpt + slope * cx.min)) + '" x2="' + x(cx.max) + '" y2="' + y(clampY(icpt + slope * cx.max)) + '"/>';
+  }
+  T.chart.innerHTML = h + '</svg>';
+  const a = Math.abs(r), word = !isFinite(r) ? '' : a >= 0.8 ? 'strong' : a >= 0.5 ? 'moderate' : a >= 0.3 ? 'weak' : 'little or no';
+  T.note.textContent = isFinite(r) ? 'r = ' + r.toFixed(2) + ': ' + word + ' straight-line link across ' + fmt(total) + ' rows. The dashed line is the best fit' + (total > 1500 ? '; 1,500 of the points are drawn' : '') + '. Horizontal: ' + cx.name + '. Vertical: ' + cy.name + '.' : 'Not enough paired values to measure a link.';
+}
+
+function drawLine(cx, cy, kind, title) {
+  const span = (cx.max - cx.min) / 864e5, unit = span > 1100 ? 'year' : span > 92 ? 'month' : 'day';
+  const keyOf = t => { const d = new Date(t); return unit === 'year' ? Date.UTC(d.getUTCFullYear(), 0, 1) : unit === 'month' ? Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) : Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); };
+  const lab = t => { const d = new Date(t); return unit === 'year' ? String(d.getUTCFullYear()) : unit === 'month' ? MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear() : MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate(); };
+  const g = new Map();
+  for (let i = 0; i < cx.values.length; i++) {
+    const t = cx.values[i]; if (t == null) continue;
+    const v = cy ? cy.values[i] : 1; if (v == null) continue;
+    const k = keyOf(t); if (!g.has(k)) g.set(k, []); g.get(k).push(v);
+  }
+  const pts = Array.from(g).sort((a, b) => a[0] - b[0]).map(e => [e[0], cy ? agg(e[1], kind) : e[1].length]);
+  if (!pts.length) { T.chart.innerHTML = ''; T.note.textContent = 'No rows have both values.'; return; }
+  const vals = pts.map(p => p[1]), yT = niceTicks(Math.min(0, Math.min.apply(null, vals)), Math.max.apply(null, vals), 5), box = plotBox(yT);
+  const x = scale(pts[0][0], pts[pts.length - 1][0], box.l + 6, box.W - box.r - 6), y = scale(yT[0], yT[yT.length - 1], box.H - box.b, box.t);
+  const X = p => pts.length === 1 ? (box.l + box.W - box.r) / 2 : x(p[0]);
+  let h = svgOpen(box, title) + yAxis(box, yT, y);
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + X(p).toFixed(1) + ',' + y(p[1]).toFixed(1)).join('');
+  if (pts.length > 1) h += '<path class="area" d="' + path + 'L' + X(pts[pts.length - 1]) + ',' + y(yT[0]) + 'L' + X(pts[0]) + ',' + y(yT[0]) + 'Z"/><path class="lineseries" d="' + path + '"/>';
+  const every = Math.max(1, Math.ceil(pts.length / Math.max(2, Math.floor((box.W - box.l) / 84))));
+  const bandW = pts.length > 1 ? (box.W - box.l - box.r) / (pts.length - 1) : box.W - box.l - box.r;
+  pts.forEach((p, i) => {
+    const px = X(p);
+    if (i % every === 0) h += '<text x="' + px + '" y="' + (box.H - 10) + '" text-anchor="' + (i === 0 ? 'start' : 'middle') + '">' + lab(p[0]) + '</text>';
+    h += '<g class="pt" data-tip="' + esc(lab(p[0]) + '\n' + fmt(p[1])) + '"><rect class="hit" x="' + (px - bandW / 2) + '" y="' + box.t + '" width="' + bandW + '" height="' + (box.H - box.b - box.t) + '"/><line x1="' + px + '" x2="' + px + '" y1="' + box.t + '" y2="' + (box.H - box.b) + '"/><circle cx="' + px + '" cy="' + y(p[1]) + '" r="' + (pts.length === 1 ? 5 : 4.5) + '"' + (pts.length === 1 ? ' style="opacity:1"' : '') + '/></g>';
+  });
+  T.chart.innerHTML = h + '</svg>';
+  const hi = pts.reduce((a, p) => p[1] > a[1] ? p : a), lo = pts.reduce((a, p) => p[1] < a[1] ? p : a);
+  T.note.textContent = 'Grouped by ' + unit + '. Highest: ' + lab(hi[0]) + ' (' + fmt(hi[1]) + '). Lowest: ' + lab(lo[0]) + ' (' + fmt(lo[1]) + ').';
+}
+
+function drawBars(cx, cy, kind, title) {
+  const g = new Map();
+  for (let i = 0; i < cx.values.length; i++) {
+    const k = cx.values[i]; if (k == null) continue;
+    const v = cy ? cy.values[i] : 1; if (v == null) continue;
+    const key = String(k); if (!g.has(key)) g.set(key, []); g.get(key).push(v);
+  }
+  let items = Array.from(g).map(e => [e[0], cy ? agg(e[1], kind) : e[1].length]).sort((a, b) => b[1] - a[1]);
+  const all = items.length, LIMIT = T.limit || 12;
+  let note = '';
+  if (all > LIMIT) {
+    const rest = items.slice(LIMIT); items = items.slice(0, LIMIT);
+    if (!cy || kind === 'sum') items.push(['Other (' + fmt(rest.length) + ' more)', rest.reduce((a, e) => a + e[1], 0)]);
+    else note = ' Showing the top ' + LIMIT + ' of ' + fmt(all) + '.';
+  }
+  if (!items.length) { T.chart.innerHTML = ''; T.note.textContent = 'No rows have both values.'; return; }
+  const max = Math.max.apply(null, items.map(e => Math.abs(e[1]))) || 1;
+  T.chart.innerHTML = '<div class="hbars" role="img" aria-label="' + esc(title) + '">' + items.map(e =>
+    '<span class="lab" title="' + esc(e[0]) + '">' + esc(e[0]) + '</span><span class="track"><div class="fill" style="width:' + (Math.abs(e[1]) / max * 100).toFixed(2) + '%" data-tip="' + esc(e[0] + '\n' + fmt(e[1])) + '"></div></span><span class="val">' + fmt(e[1]) + '</span>').join('') + '</div>';
+  const total = items.reduce((a, e) => a + e[1], 0);
+  T.note.textContent = (((!cy || kind === 'sum') && total > 0) ? items[0][0] + ' leads with ' + pct(items[0][1] / total) + ' of the total.' : items[0][0] + ' is highest at ' + fmt(items[0][1]) + '; ' + items[items.length - 1][0] + ' is lowest at ' + fmt(items[items.length - 1][1]) + '.') + note;
+}
+
+const AGG_WORD = { sum: 'Total', mean: 'Average', median: 'Median', min: 'Minimum', max: 'Maximum' };
+function renderChart() {
+  const cx = state.cols[+$('#selX').value], yv = $('#selY').value, cy = yv === '' ? null : state.cols[+yv], kind = $('#selAgg').value;
+  if (!cx) return;
+  T = { chart: $('#chart'), note: $('#chartNote') };
+  const grouped = cx.type !== 'number';
+  $('#aggWrap').hidden = !(grouped && cy);
+  let title;
+  if (cx.type === 'number' && (!cy || cy === cx)) { title = 'How ' + cx.name + ' is spread (rows per range)'; drawHistogram(cx, title); }
+  else if (cx.type === 'number') { title = cy.name + ' against ' + cx.name; drawScatter(cx, cy, title); }
+  else {
+    title = (cy ? AGG_WORD[kind] + ' ' + cy.name : 'Number of rows') + (cx.type === 'date' ? ' over time' : ' by ' + cx.name);
+    if (cx.type === 'date') drawLine(cx, cy, kind, title); else drawBars(cx, cy, kind, title);
+  }
+  $('#chartTitle').textContent = title;
+}
+
+function pickMeasure(idxs) {
+  for (const re of [/revenue|sales/i, /amount|total|profit/i, /value|cost|price/i]) { const i = idxs.find(i => re.test(state.cols[i].name)); if (i != null) return i; }
+}
+/* ---------- dashboard ---------- */
+function buildDash() {
+  const cols = state.cols, opt = (v, t, sel) => '<option value="' + esc(v) + '"' + (sel ? ' selected' : '') + '>' + esc(t) + '</option>';
+  const nums = cols.map((c, i) => c.type === 'number' && !c.idLike && c.unique > 1 ? i : -1).filter(i => i >= 0);
+  const cats = cols.map((c, i) => c.type === 'text' && c.categorical && c.unique >= 2 && c.unique <= 30 ? i : -1).filter(i => i >= 0).slice(0, 3);
+  const date = cols.findIndex(c => c.type === 'date' && c.count > 0);
+  const pref = pickMeasure(nums), def = pref != null ? pref : nums[0];
+  state.dash = { nums, cats, date };
+  let h = '<label for="dMeasure">Measure<select id="dMeasure">' + nums.map(i => opt(i, cols[i].name, i === def)).join('') + opt('', 'Number of rows', def == null) + '</select></label>' +
+    '<label for="dAgg" id="dAggWrap">Summarize as<select id="dAgg">' + opt('sum', 'Total', true) + opt('mean', 'Average') + opt('median', 'Median') + '</select></label>';
+  for (const ci of cats) h += '<label for="dF' + ci + '">' + esc(cols[ci].name) + '<select id="dF' + ci + '" data-f="' + ci + '">' + opt('', 'All') + cols[ci].top.map(e => opt(e[0], e[0])).join('') + '</select></label>';
+  if (date >= 0) h += '<label for="dRange">Period<select id="dRange">' + opt('0', 'All dates', true) + opt('30', 'Last 30 days of data') + opt('90', 'Last 90 days of data') + opt('365', 'Last 12 months of data') + '</select></label>';
+  $('#dashFilters').innerHTML = h;
+}
+function renderDash() {
+  const { cols, rows, dash } = state; if (!dash) return;
+  const mv = $('#dMeasure').value, kind = $('#dAgg').value;
+  const fs = Array.from(document.querySelectorAll('#dashFilters [data-f]')).map(s => [+s.dataset.f, s.value]).filter(f => f[1] !== '');
+  const dcol = dash.date >= 0 ? cols[dash.date] : null, range = dcol ? +$('#dRange').value : 0, from = range ? dcol.max - range * 864e5 : -Infinity;
+  const idx = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (fs.some(f => cols[f[0]].values[i] !== f[1])) continue;
+    if (range && (dcol.values[i] == null || dcol.values[i] <= from)) continue;
+    idx.push(i);
+  }
+  const sub = analyze(state.headers, idx.map(i => rows[i]), cols.map(c => c.type));
+  sub.forEach((c, i) => { c.idLike = cols[i].idLike; c.categorical = cols[i].categorical; });
+  const m = mv === '' ? null : sub[+mv], sd = dcol ? sub[dash.date] : null, hasM = m && m.count > 0;
+  $('#dAggWrap').hidden = !m;
+
+  // latest month against the one before it
+  let delta = '';
+  if (sd && sd.count) {
+    const g = new Map();
+    for (let i = 0; i < sd.values.length; i++) {
+      const t = sd.values[i], v = m ? m.values[i] : 1; if (t == null || v == null) continue;
+      const d = new Date(t), k = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); g.set(k, (g.get(k) || 0) + v);
+    }
+    const ms = Array.from(g).sort((a, b) => a[0] - b[0]), lab = t => MONTHS[new Date(t).getUTCMonth()] + ' ' + new Date(t).getUTCFullYear();
+    if (ms.length >= 2) {
+      const a = ms[ms.length - 1], b = ms[ms.length - 2];
+      delta = lab(a[0]) + ': ' + fmt(a[1]) + (b[1] ? ', ' + (a[1] >= b[1] ? '▲ ' : '▼ ') + pct(Math.abs(a[1] - b[1]) / Math.abs(b[1])) + ' vs ' + lab(b[0]) : '');
+    }
+  }
+  const tiles = [['Rows', fmt(idx.length), (idx.length < rows.length ? 'of ' + fmt(rows.length) + ' in the file' : 'the whole file') + (!m && delta ? '. ' + delta : '')]];
+  if (hasM) tiles.push(['Total ' + m.name, fmt(m.mean * m.count), delta || 'across ' + fmt(m.count) + ' rows'],
+    ['Average ' + m.name, fmt(m.mean), 'per row with a value'], ['Median ' + m.name, fmt(m.median), 'half of the rows are below this']);
+  else for (const ci of dash.cats) if (sub[ci].count) tiles.push(['Distinct ' + sub[ci].name, fmt(sub[ci].unique), 'most common: ' + sub[ci].top[0][0]]);
+  $('#tiles').innerHTML = tiles.map(t => '<div class="panel tile"><span class="k">' + esc(t[0]) + '</span><span class="v">' + esc(t[1]) + '</span><span class="s">' + esc(t[2]) + '</span></div>').join('');
+
+  const grid = $('#dgrid');
+  if (!idx.length) { grid.innerHTML = '<p class="emptymsg dcard wide">No rows match these filters. Set one of them back to All.</p>'; return; }
+  const what = m ? AGG_WORD[kind] + ' ' + m.name : 'Number of rows', cards = [];
+  if (sd && sd.count) cards.push({ t: what + ' over time', draw: ti => drawLine(sd, m, kind, ti) });
+  dash.cats.filter(ci => !fs.some(f => f[0] === ci)).slice(0, sd ? 2 : 3).forEach(ci => cards.push({ t: what + ' by ' + sub[ci].name, draw: ti => drawBars(sub[ci], m, kind, ti) }));
+  if (hasM && m.unique > 1) {
+    cards.push({ t: 'How ' + m.name + ' is spread (rows per range)', draw: ti => drawHistogram(m, ti) });
+    let best = null;
+    for (const i of dash.nums) { if (i === +mv || sub[i].unique < 2) continue; const r = pearson(sub[i].values, m.values); if (isFinite(r) && Math.abs(r) >= 0.4 && (!best || Math.abs(r) > Math.abs(best.r))) best = { c: sub[i], r }; }
+    if (best) cards.push({ t: m.name + ' against ' + best.c.name, draw: ti => drawScatter(best.c, m, ti) });
+  }
+  grid.innerHTML = cards.map((c, i) => '<article class="panel dcard' + (cards.length % 2 && i === 0 ? ' wide' : '') + '"><h3>' + esc(c.t) + '</h3><div class="chart"></div><p class="note"></p></article>').join('');
+  Array.from(grid.children).forEach((el, i) => { T = { chart: el.querySelector('.chart'), note: el.querySelector('.note'), h: 230, limit: 6 }; cards[i].draw(cards[i].t); });
+}
+function show() {
+  $('#viewDash').hidden = view !== 'dashboard'; $('#viewAna').hidden = view !== 'analysis';
+  document.querySelectorAll('.tabs a').forEach(a => { if (a.dataset.view === view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  if (view === 'dashboard') renderDash(); else renderChart();
+}
+
+/* ---------- sections ---------- */
+function renderProfiles() {
+  const n = state.rows.length;
+  $('#cols').innerHTML = state.cols.map(c => {
+    let body = '', dl = '<dt>Filled</dt><dd>' + fmt(c.count) + ' of ' + fmt(n) + '</dd><dt>Distinct</dt><dd>' + fmt(c.unique) + '</dd>';
+    if (c.type === 'number' && c.count) {
+      dl += '<dt>Average</dt><dd>' + fmt(c.mean) + '</dd><dt>Median</dt><dd>' + fmt(c.median) + '</dd><dt>Std. deviation</dt><dd>' + fmt(c.sd) + '</dd>';
+      const k = 14, lo = c.min, w = ((c.max - c.min) || 1) / k, bins = new Array(k).fill(0);
+      for (const v of c.sorted) bins[Math.min(k - 1, Math.floor((v - lo) / w))]++;
+      const mx = Math.max.apply(null, bins);
+      body = '<div><div class="spark">' + bins.map((b, i) => '<i style="height:' + (b / mx * 100).toFixed(1) + '%" data-tip="' + esc(fmt(lo + i * w) + ' to ' + fmt(lo + (i + 1) * w) + '\n' + fmt(b) + ' rows') + '"></i>').join('') + '</div><div class="sparkrange"><span>' + fmt(c.min) + '</span><span>' + fmt(c.max) + '</span></div></div>';
+    } else if (c.type === 'date' && c.count) {
+      dl += '<dt>Earliest</dt><dd>' + fmtDate(c.min) + '</dd><dt>Latest</dt><dd>' + fmtDate(c.max) + '</dd>';
+    } else if (c.type === 'text' && c.count) {
+      const top = c.top.slice(0, 4), mx = top[0][1];
+      body = c.idLike ? '<p class="muted" style="font-size:12px">Different on every row.</p>' :
+        '<div class="tops">' + top.map(e => '<span title="' + esc(e[0]) + '">' + esc(e[0]) + '</span><span class="t"><i style="width:' + (e[1] / mx * 100).toFixed(1) + '%" data-tip="' + esc(e[0] + '\n' + fmt(e[1]) + ' rows (' + pct(e[1] / c.count) + ')') + '"></i></span><span class="n">' + fmt(e[1]) + '</span>').join('') + '</div>';
+    }
+    return '<article class="panel col"><header><h3>' + esc(c.name) + '</h3><span class="chip">' + (c.idLike ? 'identifier' : c.type) + '</span></header><dl>' + dl + '</dl>' + body + '</article>';
+  }).join('');
+}
+
+function renderCorr() {
+  const nums = state.cols.filter(c => c.type === 'number' && !c.idLike && c.unique > 1).slice(0, 12);
+  $('#corrSec').hidden = nums.length < 2;
+  if (nums.length < 2) return;
+  let h = '<thead><tr><th></th>' + nums.map(c => '<th title="' + esc(c.name) + '">' + esc(c.name) + '</th>').join('') + '</tr></thead><tbody>';
+  nums.forEach((a, i) => {
+    h += '<tr><th scope="row" title="' + esc(a.name) + '">' + esc(a.name) + '</th>';
+    nums.forEach((b, j) => {
+      const r = i === j ? 1 : pearson(a.values, b.values), ok = isFinite(r), m = ok ? Math.round(Math.min(1, Math.abs(r)) * 88) : 0;
+      h += '<td class="' + (m >= 57 ? 'strong' : '') + '" style="background:color-mix(in srgb, var(' + (r < 0 ? '--neg' : '--pos') + ') ' + m + '%, var(--mid))" data-tip="' + esc(a.name + ' × ' + b.name + '\nr = ' + (ok ? r.toFixed(3) : 'n/a')) + '">' + (ok ? r.toFixed(2) : '–') + '</td>';
+    });
+    h += '</tr>';
+  });
+  $('#corr').innerHTML = h + '</tbody>';
+}
+
+function renderTable() {
+  const { cols, rows, headers } = state, q = state.q.trim().toLowerCase();
+  let idx = rows.map((_, i) => i);
+  if (q) idx = idx.filter(i => headers.some(h => String(rows[i][h] == null ? '' : rows[i][h]).toLowerCase().includes(q)));
+  if (state.sort) {
+    const v = cols[state.sort.col].values, d = state.sort.dir;
+    idx.sort((a, b) => { const x = v[a], y = v[b]; if (x == null) return y == null ? 0 : 1; if (y == null) return -1; return (x < y ? -1 : x > y ? 1 : 0) * d; });
+  }
+  const SHOW = 200, shown = idx.slice(0, SHOW);
+  $('#rowCount').textContent = (q ? fmt(idx.length) + ' of ' + fmt(rows.length) + ' rows match' : fmt(rows.length) + ' rows') + (idx.length > SHOW ? ', first ' + SHOW + ' shown' : '');
+  $('#rows').innerHTML = '<thead><tr>' + cols.map((c, i) => '<th' + (state.sort && state.sort.col === i ? ' aria-sort="' + (state.sort.dir > 0 ? 'ascending' : 'descending') + '"' : '') + '><button type="button" data-sort="' + i + '">' + esc(c.name) + (state.sort && state.sort.col === i ? (state.sort.dir > 0 ? ' ↑' : ' ↓') : '') + '</button></th>').join('') + '</tr></thead><tbody>' +
+    shown.map(i => '<tr>' + cols.map(c => { const raw = rows[i][c.name]; return isBlank(raw) ? '<td class="empty">empty</td>' : '<td' + (c.type === 'number' ? ' class="n"' : '') + '>' + esc(raw) + '</td>'; }).join('') + '</tr>').join('') + '</tbody>';
+}
+
+function load(name, headers, rows, example) {
+  headers = headers.filter(h => h != null && String(h).trim() !== '');
+  if (!headers.length || !rows.length) throw new Error('No rows found. The first row should hold column names, with data underneath.');
+  Object.assign(state, { name, headers, rows, example: !!example, sort: null, q: '' });
+  state.cols = analyze(headers, rows);
+  const seen = new Set(); let dupes = 0;
+  for (const r of rows) { const k = headers.map(h => r[h]).join('\u0001'); if (seen.has(k)) dupes++; else seen.add(k); }
+  state.dupes = dupes;
+  const cols = state.cols, miss = cols.reduce((a, c) => a + c.missing, 0);
+  $('#dsName').textContent = name; $('#dsExample').hidden = !example; $('#sampleBtn').hidden = !!example; $('#q').value = '';
+  $('#facts').innerHTML = '<span><b>' + fmt(rows.length) + '</b> rows</span><span><b>' + cols.length + '</b> columns</span><span><b>' + cols.filter(c => c.type === 'number').length + '</b> numeric</span><span><b>' + fmt(miss) + '</b> empty cells</span><span><b>' + fmt(dupes) + '</b> duplicate rows</span>';
+  $('#findings').innerHTML = findings().map(f => '<li><span class="kind">' + f.kind + '</span><span>' + f.html + '</span></li>').join('');
+  const opt = (c, i) => '<option value="' + i + '">' + esc(c.name) + '</option>';
+  $('#selX').innerHTML = cols.map((c, i) => c.idLike ? '' : opt(c, i)).join('') || cols.map(opt).join('');
+  $('#selY').innerHTML = '<option value="">Number of rows</option>' + cols.map((c, i) => c.type === 'number' && !c.idLike ? opt(c, i) : '').join('');
+  const dx = cols.findIndex(c => c.type === 'date'), cxi = cols.findIndex(c => c.type === 'text' && c.categorical), nxi = cols.findIndex(c => c.type === 'number' && !c.idLike);
+  const xi = dx >= 0 ? dx : cxi >= 0 ? cxi : nxi;
+  if (xi >= 0) $('#selX').value = String(xi);
+  const numsIdx = cols.map((c, i) => c.type === 'number' && !c.idLike ? i : -1).filter(i => i >= 0 && i !== xi);
+  const pref = pickMeasure(numsIdx);
+  const yi = pref != null ? pref : numsIdx[0];
+  $('#selY').value = yi != null && xi !== nxi ? String(yi) : '';
+  $('#selAgg').value = 'sum';
+  renderChart(); renderProfiles(); renderCorr(); renderTable();
+  buildDash(); show();
+}
+
+/* ---------- input ---------- */
+function showError(msg) { const e = $('#error'); e.textContent = msg; e.hidden = !msg; }
+function fromText(name, text) {
+  const t = text.trim();
+  if (!t) throw new Error('There is nothing to read yet. Paste some data first.');
+  if (t[0] === '[' || t[0] === '{') {
+    let data; try { data = JSON.parse(t); } catch (e) { throw new Error('This looks like JSON but could not be read: ' + e.message); }
+    if (!Array.isArray(data)) data = Object.values(data).find(Array.isArray) || [data];
+    data = data.filter(r => r && typeof r === 'object' && !Array.isArray(r));
+    const headers = []; for (const r of data) for (const k of Object.keys(r)) if (!headers.includes(k)) headers.push(k);
+    return load(name, headers, data.map(r => { const o = {}; for (const h of headers) { const v = r[h]; o[h] = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); } return o; }));
+  }
+  const res = Papa.parse(t, { header: true, skipEmptyLines: 'greedy' });
+  load(name, res.meta.fields || [], res.data);
+}
+function fromFile(file) {
+  showError('');
+  const excel = /\.(xlsx|xls)$/i.test(file.name), fr = new FileReader();
+  fr.onerror = () => showError('The file could not be read.');
+  fr.onload = () => {
+    try {
+      if (excel) {
+        const wb = XLSX.read(fr.result, { type: 'array', cellDates: true }), ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: true });
+        const headers = []; for (const r of data) for (const k of Object.keys(r)) if (!headers.includes(k)) headers.push(k);
+        load(file.name + (wb.SheetNames.length > 1 ? ' (sheet "' + wb.SheetNames[0] + '")' : ''), headers,
+          data.map(r => { const o = {}; for (const h of headers) { const v = r[h]; o[h] = v instanceof Date ? v.toISOString().slice(0, 10) : v == null ? '' : String(v); } return o; }));
+      } else fromText(file.name, String(fr.result));
+      window.scrollTo(0, 0);
+    } catch (e) { showError(e.message); }
+  };
+  if (excel) fr.readAsArrayBuffer(file); else fr.readAsText(file);
+}
+
+/* ---------- example data: generated, not real ---------- */
+function loadExample() {
+  let seed = 20261116;
+  const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const pick = (arr, w) => { let r = rnd() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < arr.length; i++) { r -= w[i]; if (r <= 0) return arr[i]; } return arr[arr.length - 1]; };
+  const cats = { Electronics: [89, 60], Home: [42, 22], Apparel: [35, 14], Toys: [24, 9], Stationery: [9, 4] };
+  const headers = ['order_id', 'order_date', 'region', 'category', 'channel', 'units', 'unit_price', 'discount_pct', 'revenue', 'delivery_days', 'rating'];
+  const rows = [], start = Date.UTC(2026, 0, 2);
+  for (let i = 0; i < 280; i++) {
+    const day = Math.floor(Math.pow(rnd(), 0.8) * 300), date = new Date(start + day * 864e5).toISOString().slice(0, 10);
+    const region = pick(['West', 'East', 'North', 'South'], [34, 27, 21, 18]);
+    const category = pick(Object.keys(cats), [16, 22, 26, 14, 22]), channel = pick(['Web', 'App', 'Store'], [48, 32, 20]);
+    let units = 1 + Math.floor(Math.pow(rnd(), 2.2) * 9); if (rnd() < 0.025) units = 40 + Math.floor(rnd() * 50);
+    const price = Math.max(2, cats[category][0] + (rnd() - 0.5) * 2 * cats[category][1]);
+    const disc = rnd() < 0.55 ? 0 : pick([5, 10, 15, 25], [4, 4, 2, 1]);
+    const delivery = channel === 'Store' ? 0 : Math.max(1, Math.round((region === 'North' ? 5.5 : 3.2) + (rnd() - 0.4) * 5));
+    const rating = Math.max(1, Math.min(5, Math.round((4.7 - delivery * 0.28 + (rnd() - 0.5) * 1.4) * 10) / 10));
+    rows.push({ order_id: String(10400 + i), order_date: date, region, category, channel, units: String(units), unit_price: price.toFixed(2), discount_pct: String(disc),
+      revenue: (units * price * (1 - disc / 100)).toFixed(2), delivery_days: String(delivery), rating: rnd() < 0.09 ? '' : rating.toFixed(1) });
+  }
+  rows.sort((a, b) => a.order_date < b.order_date ? -1 : a.order_date > b.order_date ? 1 : 0);
+  load('Online store orders, Jan to Oct 2026', headers, rows, true);
+}
+
+/* ---------- events ---------- */
+$('#file').addEventListener('change', e => { if (e.target.files[0]) fromFile(e.target.files[0]); e.target.value = ''; });
+$('#pasteToggle').addEventListener('click', () => { const b = $('#pastebox'); b.hidden = !b.hidden; $('#pasteToggle').setAttribute('aria-expanded', String(!b.hidden)); if (!b.hidden) $('#pasteArea').focus(); });
+$('#pasteGo').addEventListener('click', () => { showError(''); try { fromText('Pasted data', $('#pasteArea').value); $('#pastebox').hidden = true; $('#pasteToggle').setAttribute('aria-expanded', 'false'); } catch (e) { showError(e.message); } });
+$('#sampleBtn').addEventListener('click', () => { showError(''); loadExample(); });
+['selX', 'selY', 'selAgg'].forEach(id => $('#' + id).addEventListener('change', renderChart));
+$('#q').addEventListener('input', e => { state.q = e.target.value; renderTable(); });
+$('#rows').addEventListener('click', e => {
+  const b = e.target.closest('[data-sort]'); if (!b) return;
+  const c = +b.dataset.sort; state.sort = state.sort && state.sort.col === c ? (state.sort.dir > 0 ? { col: c, dir: -1 } : null) : { col: c, dir: 1 };
+  renderTable();
+});
+let depth = 0;
+document.addEventListener('dragenter', e => { e.preventDefault(); depth++; document.body.classList.add('dragging'); });
+document.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; document.body.classList.remove('dragging'); } });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault(); depth = 0; document.body.classList.remove('dragging'); const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) fromFile(f); });
+const tip = $('#tip');
+document.addEventListener('pointermove', e => {
+  const t = e.target.closest && e.target.closest('[data-tip]');
+  if (!t) { tip.hidden = true; return; }
+  tip.textContent = t.dataset.tip; tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(window.innerWidth - r.width - 8, e.clientX + 14)) + 'px';
+  tip.style.top = (e.clientY + 18 + r.height > window.innerHeight ? e.clientY - r.height - 10 : e.clientY + 18) + 'px';
+});
+document.addEventListener('pointerleave', () => { tip.hidden = true; });
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(show, 150); });
+$('#dashFilters').addEventListener('change', renderDash);
+document.querySelector('.tabs').addEventListener('click', e => {
+  const a = e.target.closest('a[data-view]'); if (!a) return;
+  e.preventDefault(); view = a.dataset.view; try { location.hash = view; } catch (err) {} show();
+});
+window.addEventListener('hashchange', () => { const v = location.hash === '#analysis' ? 'analysis' : location.hash === '#dashboard' ? 'dashboard' : view; if (v !== view) { view = v; show(); } });
+
+loadExample();
+})();
+</script>

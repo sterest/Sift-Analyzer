@@ -1,0 +1,74 @@
+# Sift
+
+Upload a CSV, Excel, TSV or JSON file and get plain-language findings, column profiles, correlations and a dashboard you can filter and save. Accounts keep each person's files and saved dashboard views private.
+
+## Stack
+
+- **Next.js 16** (App Router, TypeScript, Cache Components) for the site and server actions
+- **Supabase** for accounts (email and password), the Postgres database and private file storage
+- **Vercel** for hosting (recommended)
+- Parsing and analysis run in the browser: `papaparse` for CSV, `read-excel-file` for Excel
+
+## Project layout
+
+| Path | What it holds |
+|---|---|
+| `src/lib/analyze.ts` | Column typing, statistics, correlations and the written findings |
+| `src/lib/aggregate.ts` | Grouping by time and category, histograms |
+| `src/lib/parse-file.ts` | Reading CSV / TSV / JSON / Excel into rows |
+| `src/components/` | Charts, the Dashboard and Analysis views, the file picker, the site header |
+| `src/app/page.tsx` | Home page |
+| `src/app/try/` | Analyze a file without an account (nothing is uploaded) |
+| `src/app/(auth)/` | Sign in, sign up, password reset and their server actions |
+| `src/app/app/` | Signed-in area: your datasets, upload, the dataset page with saved views |
+| `src/app/auth/confirm/route.ts` | Where links in Supabase emails land |
+| `src/proxy.ts` | Refreshes the session cookie and keeps signed-out visitors out of `/app` |
+| `supabase/schema.sql` | Tables, row-level security and the storage bucket |
+
+## Run it locally
+
+Needs Node.js 20.9 or newer.
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. The home page and **Try it** work straight away. Account pages show setup steps until Supabase is connected.
+
+## Connect accounts (Supabase)
+
+1. Create a free project at https://supabase.com.
+2. Open **SQL Editor**, paste in `supabase/schema.sql` and run it. It creates the `datasets` and `dashboards` tables, turns on row-level security so each person sees only their own rows, and creates a private `datasets` storage bucket (25 MB per file).
+3. Copy `.env.example` to `.env.local`. Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from **Project Settings → API Keys**. Use the publishable (or "anon") key, never the secret or service-role key.
+4. In **Authentication → URL Configuration**, set **Site URL** to `http://localhost:3000` for now, and add `http://localhost:3000/**` to **Redirect URLs**.
+5. Restart `npm run dev`, create an account and confirm it from the email.
+
+## Deploy (Vercel)
+
+1. Put the project in a Git repository and push it to GitHub.
+2. Import the repository in Vercel. Add the same two `NEXT_PUBLIC_SUPABASE_*` variables, plus `NEXT_PUBLIC_SITE_URL` set to the live address.
+3. In Supabase **URL Configuration**, change **Site URL** to the live address and add `https://<your-domain>/**` to **Redirect URLs**.
+4. Supabase's built-in email sender is rate-limited and meant for testing. Before real users sign up, set up your own SMTP provider under **Authentication → Emails**.
+
+## How data is protected
+
+- Uploaded files go to a private bucket, in a folder named after the owner's user id. Storage policies only let that user read, upload or delete there.
+- Every table has row-level security keyed on `auth.uid()`, so a request can only reach its own rows whatever the browser sends.
+- Files on the **Try it** page never leave the browser.
+
+## Scripts
+
+| Command | Does |
+|---|---|
+| `npm run dev` | Development server with hot reload |
+| `npm run build` | Production build (also type-checks) |
+| `npm run start` | Serve the production build |
+| `npm run lint` | ESLint |
+
+## Planned next
+
+- Ask questions about a dataset in plain English (Claude API, called from a server route so the key stays secret)
+- Export a dashboard as PNG or PDF, and tables as CSV
+- Automated tests for `src/lib/analyze.ts` and the upload flow
+- Handling for very large files (background parsing, DuckDB-WASM)
