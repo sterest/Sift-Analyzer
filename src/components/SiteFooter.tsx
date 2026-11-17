@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InstallButton } from "./InstallButton";
 
 export function SiteFooter() {
   return (
@@ -8,6 +9,7 @@ export function SiteFooter() {
         <nav className="sitefoot-nav" aria-label="Site">
           <Link href="/try">Try it</Link>
           <Link href="/privacy">Privacy policy</Link>
+          <InstallButton />
         </nav>
       </div>
     </footer>

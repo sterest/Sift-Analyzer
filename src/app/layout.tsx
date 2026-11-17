@@ -8,6 +8,8 @@ const mono = IBM_Plex_Mono({ variable: "--font-plex-mono", subsets: ["latin"], w
 export const metadata: Metadata = {
   title: { default: "Sift: see what's in your data", template: "%s · Sift" },
   description: "Upload a CSV, Excel or JSON file and get plain-language findings and a dashboard you can filter and save.",
+  applicationName: "Sift",
+  appleWebApp: { capable: true, title: "Sift", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

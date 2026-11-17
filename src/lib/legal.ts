@@ -4,19 +4,19 @@
  */
 export const LEGAL = {
   /** Who runs Sift and is responsible for the data: a person's name or a registered company. */
-  operator: "[Operator name]",
+  operator: "Stephanie Osakwe",
   /** Postal or registered address of the operator. */
-  address: "[Operator address]",
+  address: "Army engineers Jos Plateau State",
   /** Address people write to about their data. */
-  contactEmail: "[privacy@example.com]",
+  contactEmail: "osakwestephanie5@gmail.com",
   /** Country whose law governs the operator, e.g. "Nigeria" or "the United Kingdom". */
-  country: "[Country]",
+  country: "Nigeria",
   /** The data protection authority people can complain to, e.g. "the Nigeria Data Protection Commission". */
-  regulator: "[Data protection authority]",
+  regulator: "the Nigeria Data Protection Commission",
   /** The region chosen when the Supabase project was created, e.g. "West EU (Ireland)". */
   dataRegion: "[Supabase project region]",
   /** Date this version of the policy takes effect. */
-  effectiveDate: "[Effective date]",
+  effectiveDate: "17/11/2026",
 };
 
 export const legalIsDraft = Object.values(LEGAL).some((v) => v.startsWith("["));
