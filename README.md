@@ -44,7 +44,29 @@ Open http://localhost:3000. The home page and **Try it** work straight away. Acc
 4. In **Authentication → URL Configuration**, set **Site URL** to `http://localhost:3000` for now, and add `http://localhost:3000/**` to **Redirect URLs**.
 5. Restart `npm run dev`, create an account and confirm it from the email.
 
+## Google sign-in
+
+The sign-in and sign-up pages have a **Continue with Google** button. It goes through Supabase, so Google needs one setting in Google Cloud and one in Supabase:
+
+1. In **Google Cloud Console** (console.cloud.google.com), create a project, then go to **Google Auth Platform**:
+   - **Branding / OAuth consent screen:** app name "Sift", your support email, audience **External**. Add the privacy policy link `https://sift-analyzer-pi.vercel.app/privacy`.
+   - **Clients → Create client → Web application.** Under **Authorized redirect URIs** add `https://<your-project-ref>.supabase.co/auth/v1/callback`; Supabase shows this exact address on its Google provider page.
+   - Copy the **Client ID** and **Client secret**.
+   - Under **Audience**, click **Publish app**. While it's in "Testing", only the test users you list can sign in.
+2. In **Supabase → Authentication → Sign In / Providers → Google**, turn it on and paste the client ID and secret. Never put the client secret in this project's files.
+3. In **Supabase → Authentication → URL Configuration**, set **Site URL** to `https://sift-analyzer-pi.vercel.app` and add both `https://sift-analyzer-pi.vercel.app/**` and `http://localhost:3000/**` to **Redirect URLs**.
+
+Sift asks Google only for the basic sign-in details (email, name, picture), so Google doesn't require an app review.
+
 ## Deploy (Vercel)
+
+`scripts/deploy-vercel.ps1` publishes with a Vercel access token you paste in (it isn't stored). When `.env.local` holds the Supabase URL and publishable key, the script copies them to the Vercel project before building.
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\deploy-vercel.ps1
+```
+
+Alternatively, connect a GitHub repository:
 
 1. Put the project in a Git repository and push it to GitHub.
 2. Import the repository in Vercel. Add the same two `NEXT_PUBLIC_SUPABASE_*` variables, plus `NEXT_PUBLIC_SITE_URL` set to the live address.

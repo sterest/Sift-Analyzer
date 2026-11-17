@@ -73,6 +73,24 @@ export async function updatePassword(_prev: AuthState, fd: FormData): Promise<Au
   redirect("/app");
 }
 
+/**
+ * Starts "Continue with Google". Supabase returns Google's consent page address; after the person agrees,
+ * Google sends them back through Supabase to /auth/confirm, which finishes signing them in.
+ */
+export async function signInWithGoogle() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${await siteOrigin()}/auth/confirm?next=/app`,
+      // Always show Google's account chooser, so people with several Google accounts can pick one.
+      queryParams: { prompt: "select_account" },
+    },
+  });
+  if (error || !data.url) redirect("/login?error=google");
+  redirect(data.url);
+}
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();

@@ -43,7 +43,7 @@ export default function PrivacyPage() {
           <section className="legal-summary" aria-labelledby="summary">
             <h2 id="summary">The short version</h2>
             <ul>
-              <li>We collect your email address, the files you upload and the dashboard views you save, so we can run Sift for you.</li>
+              <li>We collect your email address (and, if you sign in with Google, your name and profile picture), the files you upload and the dashboard views you save, so we can run Sift for you.</li>
               <li>Your files are private to your account. We don&apos;t sell your data, show ads or use tracking or analytics tools.</li>
               <li>Files you open on the <Link href="/try">Try it</Link> page never leave your browser.</li>
               <li>You can download your data and delete your account yourself, at any time, from your account page.</li>
@@ -68,6 +68,7 @@ export default function PrivacyPage() {
             <h3>Information you give us</h3>
             <ul>
               <li><b>Account details:</b> your email address and password. Your password is stored only as a one-way hash by our authentication provider; we can&apos;t read it.</li>
+              <li><b>If you sign in with Google:</b> Google tells us your email address, your name and the address of your profile picture, and confirms your email is verified. We don&apos;t get your Google password or access to your Gmail, Drive or contacts. You can remove Sift&apos;s access at any time in your Google Account under Security, Third-party apps.</li>
               <li><b>Files you upload:</b> the CSV, Excel, TSV or JSON files you add to your account, their names, and the number of rows and columns in each. These files can contain any information you choose to put in them, including other people&apos;s personal data. See <a href="#your-files">Files that contain personal data</a>.</li>
               <li><b>Saved views:</b> the names and settings (measure, filters, period) of dashboard views you save.</li>
               <li><b>Messages:</b> anything you send us by email.</li>
@@ -90,7 +91,7 @@ export default function PrivacyPage() {
             <table className="legal-table">
               <thead><tr><th scope="col">What we do</th><th scope="col">Data used</th><th scope="col">Why we&apos;re allowed to</th></tr></thead>
               <tbody>
-                <tr><td>Create and run your account, sign you in, reset your password</td><td>Email, password hash, sign-in records</td><td>Needed to provide the service you asked for (contract)</td></tr>
+                <tr><td>Create and run your account, sign you in, reset your password</td><td>Email, password hash or Google profile, sign-in records</td><td>Needed to provide the service you asked for (contract)</td></tr>
                 <tr><td>Store your files and saved views and show them back to you</td><td>Files, file details, saved views</td><td>Needed to provide the service (contract)</td></tr>
                 <tr><td>Send emails about your account (confirmation, password reset, important changes)</td><td>Email</td><td>Needed to provide the service (contract)</td></tr>
                 <tr><td>Keep Sift secure, prevent abuse and fix problems</td><td>Server logs, sign-in records</td><td>Our legitimate interest in a safe, working service</td></tr>
@@ -117,6 +118,10 @@ export default function PrivacyPage() {
               <li><b>Supabase:</b> accounts and sign-in, the database, file storage and account emails.</li>
               <li><b>Vercel:</b> hosting the website and its server code, including server logs.</li>
             </ul>
+            <p>
+              If you choose to sign in with <b>Google</b>, Google learns that you signed in to Sift, under Google&apos;s own privacy policy.
+              We don&apos;t send Google your files or anything else from Sift.
+            </p>
             <p>
               We may also disclose data if the law requires it, to protect people&apos;s safety or our legal rights, or to a buyer if Sift is
               sold or merged, in which case this policy would continue to apply to your data.
