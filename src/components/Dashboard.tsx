@@ -4,9 +4,10 @@ import { useMemo } from "react";
 import { analyze, measureCols, pearson, pickMeasure, type Column, type Dataset } from "@/lib/analyze";
 import { groupByCategory, groupByTime } from "@/lib/aggregate";
 import { fmt, MONTHS, pct } from "@/lib/format";
-import { BarList, HistogramChart, LineChart, ScatterChart } from "./charts";
+import { AreaChart, BarList, DonutChart, HistogramChart, KpiCard, LineChart, ScatterChart, TreemapChart } from "./charts";
 
 export type DashAgg = "sum" | "mean" | "median";
+export type ChartStyle = "bar" | "donut" | "treemap";
 
 /** A dashboard view, stored by column name so it survives re-uploads of the same file. */
 export interface DashConfig {
@@ -15,6 +16,7 @@ export interface DashConfig {
   filters: Record<string, string>;
   /** Only keep the last N days of data; 0 keeps everything. */
   range: number;
+  chartStyle?: ChartStyle;
 }
 
 const AGG_WORD: Record<DashAgg, string> = { sum: "Total", mean: "Average", median: "Median" };
@@ -93,29 +95,41 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
     }
   }
 
-  const tiles: { k: string; v: string; s: string }[] = [
-    { k: "Rows", v: fmt(sub.n), s: sub.n < rows.length ? `of ${fmt(rows.length)} in the file` : "the whole file" },
+  const chartStyle = config.chartStyle ?? "bar";
+
+  const kpis: { title: string; value: string; subtitle?: string; trend?: { pct: number; up: boolean } }[] = [
+    { title: "Rows", value: fmt(sub.n), subtitle: sub.n < rows.length ? `of ${fmt(rows.length)} in the file` : "the whole file" },
   ];
   if (hasM) {
-    tiles.push(
-      { k: `Total ${m!.name}`, v: fmt(m!.mean! * m!.count), s: delta?.text ?? `across ${fmt(m!.count)} rows` },
-      { k: `Average ${m!.name}`, v: fmt(m!.mean), s: "per row with a value" },
-      { k: `Median ${m!.name}`, v: fmt(m!.median), s: "half of the rows are below this" },
+    const totalVal = m!.mean! * m!.count;
+    kpis.push(
+      { title: `Total ${m!.name}`, value: fmt(totalVal), subtitle: delta?.text ?? `across ${fmt(m!.count)} rows`,
+        ...(delta?.up != null ? { trend: { pct: parseFloat(delta.text.match(/([0-9.]+)%/)?.[1] ?? "0"), up: delta.up } } : {}) },
+      { title: `Average ${m!.name}`, value: fmt(m!.mean), subtitle: "per row with a value" },
+      { title: `Median ${m!.name}`, value: fmt(m!.median), subtitle: "half of the rows are below this" },
     );
   } else {
-    if (delta) tiles[0].s += ". " + delta.text;
-    for (const ci of cats) if (sub.cols[ci].count) tiles.push({ k: `Distinct ${sub.cols[ci].name}`, v: fmt(sub.cols[ci].unique), s: `most common: ${sub.cols[ci].top![0][0]}` });
+    if (delta) kpis[0].subtitle = (kpis[0].subtitle ?? "") + ". " + delta.text;
+    for (const ci of cats) if (sub.cols[ci].count) kpis.push({ title: `Distinct ${sub.cols[ci].name}`, value: fmt(sub.cols[ci].unique), subtitle: `most common: ${sub.cols[ci].top![0][0]}` });
   }
 
   const cards: { key: string; title: string; node: React.ReactNode }[] = [];
   if (sub.n) {
     if (sd && sd.count) {
       const t = `${what} over time`;
-      cards.push({ key: "trend", title: t, node: <LineChart series={groupByTime(sd, m, config.agg)} label={t} height={240} /> });
+      cards.push({ key: "trend", title: t, node: <AreaChart series={groupByTime(sd, m, config.agg)} label={t} height={240} /> });
     }
-    cats.filter((ci) => !config.filters[cols[ci].name]).slice(0, sd ? 2 : 3).forEach((ci) => {
+    const filteredCats = cats.filter((ci) => !config.filters[cols[ci].name]).slice(0, sd ? 2 : 3);
+    filteredCats.forEach((ci) => {
+      const catData = groupByCategory(sub.cols[ci], m, config.agg, chartStyle === "treemap" ? 12 : 6);
       const t = `${what} by ${sub.cols[ci].name}`;
-      cards.push({ key: "cat-" + ci, title: t, node: <BarList items={groupByCategory(sub.cols[ci], m, config.agg, 6).items} label={t} /> });
+      if (chartStyle === "donut") {
+        cards.push({ key: "cat-" + ci, title: t, node: <DonutChart items={catData.items} label={t} /> });
+      } else if (chartStyle === "treemap") {
+        cards.push({ key: "cat-" + ci, title: t, node: <TreemapChart items={catData.items} label={t} /> });
+      } else {
+        cards.push({ key: "cat-" + ci, title: t, node: <BarList items={catData.items} label={t} /> });
+      }
     });
     if (hasM && m!.unique > 1) {
       cards.push({ key: "hist", title: `How ${m!.name} is spread (rows per range)`, node: <HistogramChart col={m!} height={220} /> });
@@ -168,6 +182,15 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
             </select>
           </label>
         )}
+        {cats.length > 0 && (
+          <label>Chart style
+            <select value={chartStyle} onChange={(e) => set({ chartStyle: e.target.value as ChartStyle })}>
+              <option value="bar">Bars</option>
+              <option value="donut">Donut</option>
+              <option value="treemap">Treemap</option>
+            </select>
+          </label>
+        )}
         <button type="button" className="btn btn-quiet" disabled={!anyFilter} onClick={() => set({ filters: {}, range: 0 })}>Clear filters</button>
       </div>
 
@@ -175,13 +198,9 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
         <p className="emptymsg">No rows match these filters. Set one of them back to All.</p>
       ) : (
         <>
-          <div className="tiles">
-            {tiles.map((t) => (
-              <div key={t.k} className="panel tile">
-                <span className="k">{t.k}</span>
-                <span className="v">{t.v}</span>
-                <span className="s">{t.s}</span>
-              </div>
+          <div className="kpi-row">
+            {kpis.map((k) => (
+              <KpiCard key={k.title} title={k.title} value={k.value} subtitle={k.subtitle} trend={k.trend} />
             ))}
           </div>
           <div className="dgrid">
