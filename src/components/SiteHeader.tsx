@@ -7,10 +7,14 @@ import { createClient } from "@/lib/supabase/server";
 export function Brand() {
   return (
     <Link href="/" className="brand" aria-label="Sift home">
-      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="3" y="13" width="4" height="8" rx="1.5" fill="currentColor" opacity=".45" />
-        <rect x="10" y="8" width="4" height="13" rx="1.5" fill="currentColor" opacity=".7" />
-        <rect x="17" y="3" width="4" height="18" rx="1.5" fill="currentColor" />
+      <svg width="22" height="22" viewBox="0 0 512 512" aria-hidden="true">
+        <rect width="512" height="512" rx="112" fill="#111"/>
+        <rect x="102" y="78"  width="205" height="36" rx="18" fill="#fff" opacity=".95"/>
+        <rect x="154" y="148" width="256" height="36" rx="18" fill="#fff" opacity=".85"/>
+        <rect x="205" y="218" width="205" height="36" rx="18" fill="#fff" opacity=".75"/>
+        <rect x="154" y="288" width="256" height="36" rx="18" fill="#fff" opacity=".65"/>
+        <rect x="102" y="358" width="205" height="36" rx="18" fill="#fff" opacity=".55"/>
+        <rect x="205" y="428" width="205" height="36" rx="18" fill="#fff" opacity=".45"/>
       </svg>
       Sift
     </Link>

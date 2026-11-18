@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#111111"/>
+  <!-- S-shaped flowing data bars -->
+  <rect x="102" y="78"  width="205" height="36" rx="18" fill="#fff" opacity=".95"/>
+  <rect x="154" y="148" width="256" height="36" rx="18" fill="#fff" opacity=".85"/>
+  <rect x="205" y="218" width="205" height="36" rx="18" fill="#fff" opacity=".75"/>
+  <rect x="154" y="288" width="256" height="36" rx="18" fill="#fff" opacity=".65"/>
+  <rect x="102" y="358" width="205" height="36" rx="18" fill="#fff" opacity=".55"/>
+  <rect x="205" y="428" width="205" height="36" rx="18" fill="#fff" opacity=".45"/>
+</svg>
