@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { analyze, measureCols, pearson, pickMeasure, type Column, type Dataset } from "@/lib/analyze";
 import { groupByCategory, groupByTime } from "@/lib/aggregate";
 import { fmt, MONTHS, pct } from "@/lib/format";
-import { AreaChart, BarList, DonutChart, HistogramChart, KpiCard, LineChart, ScatterChart, TreemapChart } from "./charts";
+import { AreaChart, BarList, DataTable, DonutChart, HistogramChart, KpiCard, LineChart, ScatterChart, TreemapChart } from "./charts";
 
 export type DashAgg = "sum" | "mean" | "median";
 export type ChartStyle = "bar" | "donut" | "treemap";
@@ -98,15 +98,15 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
   const chartStyle = config.chartStyle ?? "bar";
 
   const kpis: { title: string; value: string; subtitle?: string; trend?: { pct: number; up: boolean } }[] = [
-    { title: "Rows", value: fmt(sub.n), subtitle: sub.n < rows.length ? `of ${fmt(rows.length)} in the file` : "the whole file" },
+    { title: "Rows", value: fmt(sub.n), subtitle: sub.n < rows.length ? `of ${fmt(rows.length)} total` : "the whole file" },
   ];
   if (hasM) {
     const totalVal = m!.mean! * m!.count;
     kpis.push(
       { title: `Total ${m!.name}`, value: fmt(totalVal), subtitle: delta?.text ?? `across ${fmt(m!.count)} rows`,
         ...(delta?.up != null ? { trend: { pct: parseFloat(delta.text.match(/([0-9.]+)%/)?.[1] ?? "0"), up: delta.up } } : {}) },
-      { title: `Average ${m!.name}`, value: fmt(m!.mean), subtitle: "per row with a value" },
-      { title: `Median ${m!.name}`, value: fmt(m!.median), subtitle: "half of the rows are below this" },
+      { title: `Average ${m!.name}`, value: fmt(m!.mean), subtitle: "per row" },
+      { title: `Median ${m!.name}`, value: fmt(m!.median), subtitle: "midpoint" },
     );
   } else {
     if (delta) kpis[0].subtitle = (kpis[0].subtitle ?? "") + ". " + delta.text;
@@ -141,78 +141,117 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
       }
       if (best) cards.push({ key: "scatter", title: `${m!.name} against ${best.c.name} (r = ${best.r.toFixed(2)})`, node: <ScatterChart xCol={best.c} yCol={m!} height={220} /> });
     }
+    // Cross-tab data table when two category columns are visible
+    const freeCats = cats.filter((ci) => !config.filters[cols[ci].name]);
+    if (freeCats.length >= 2) {
+      const c1 = sub.cols[freeCats[0]], c2 = sub.cols[freeCats[1]];
+      const rowVals = c1.top!.slice(0, 8).map((t) => t[0]);
+      const colVals = c2.top!.slice(0, 6).map((t) => t[0]);
+      const grid: Record<string, Record<string, number>> = {};
+      for (const rv of rowVals) { grid[rv] = {}; for (const cv of colVals) grid[rv][cv] = 0; }
+      for (let i = 0; i < c1.values.length; i++) {
+        const r = c1.values[i], c = c2.values[i], v = m ? m.values[i] : 1;
+        if (typeof r !== "string" || typeof c !== "string" || typeof v !== "number") continue;
+        if (r in grid && c in grid[r]) grid[r][c] += v;
+      }
+      const tbl = rowVals.map((rv) => ({ label: rv, values: colVals.map((cv) => grid[rv][cv]), total: colVals.reduce((s, cv) => s + grid[rv][cv], 0) }));
+      const tTitle = `${what} by ${c1.name} & ${c2.name}`;
+      cards.push({ key: "pivot", title: tTitle, node: <DataTable data={tbl} rowHeader={c1.name} colHeaders={colVals} label={tTitle} /> });
+    }
   }
 
   const anyFilter = Object.values(config.filters).some((v) => v) || config.range > 0;
 
   return (
-    <div className="stack">
-      <div className="controls">
-        <label>Measure
-          <select value={config.measure ?? ""} onChange={(e) => set({ measure: e.target.value || null })}>
-            {nums.map((i) => <option key={i} value={cols[i].name}>{cols[i].name}</option>)}
-            <option value="">Number of rows</option>
-          </select>
-        </label>
-        {m && (
-          <label>Summarize as
-            <select value={config.agg} onChange={(e) => set({ agg: e.target.value as DashAgg })}>
-              {(Object.keys(AGG_WORD) as DashAgg[]).map((k) => <option key={k} value={k}>{AGG_WORD[k]}</option>)}
+    <div className="dash-page">
+      <header className="dash-head">
+        <svg width="28" height="28" viewBox="0 0 512 512" aria-hidden="true">
+          <rect width="512" height="512" rx="112" fill="currentColor"/>
+          <rect x="102" y="78" width="205" height="36" rx="18" fill="#fff" opacity=".95"/>
+          <rect x="154" y="148" width="256" height="36" rx="18" fill="#fff" opacity=".85"/>
+          <rect x="205" y="218" width="205" height="36" rx="18" fill="#fff" opacity=".75"/>
+          <rect x="154" y="288" width="256" height="36" rx="18" fill="#fff" opacity=".65"/>
+          <rect x="102" y="358" width="205" height="36" rx="18" fill="#fff" opacity=".55"/>
+          <rect x="205" y="428" width="205" height="36" rx="18" fill="#fff" opacity=".45"/>
+        </svg>
+        <h2>{ds.name}</h2>
+      </header>
+      <div className="dash-body">
+        <aside className="dash-sidebar">
+          <div className="dash-filter-group">
+            <span className="dash-filter-label">Measure</span>
+            <select value={config.measure ?? ""} onChange={(e) => set({ measure: e.target.value || null })}>
+              {nums.map((i) => <option key={i} value={cols[i].name}>{cols[i].name}</option>)}
+              <option value="">Number of rows</option>
             </select>
-          </label>
-        )}
-        {cats.map((ci) => {
-          const c = cols[ci];
-          return (
-            <label key={c.name}>{c.name}
-              <select value={config.filters[c.name] ?? ""} onChange={(e) => set({ filters: { ...config.filters, [c.name]: e.target.value } })}>
-                <option value="">All</option>
-                {c.top!.map(([v]) => <option key={v} value={v}>{v}</option>)}
+          </div>
+          {m && (
+            <div className="dash-filter-group">
+              <span className="dash-filter-label">Summarize as</span>
+              <select value={config.agg} onChange={(e) => set({ agg: e.target.value as DashAgg })}>
+                {(Object.keys(AGG_WORD) as DashAgg[]).map((k) => <option key={k} value={k}>{AGG_WORD[k]}</option>)}
               </select>
-            </label>
-          );
-        })}
-        {dateIdx >= 0 && (
-          <label>Period
-            <select value={config.range} onChange={(e) => set({ range: +e.target.value })}>
-              <option value={0}>All dates</option>
-              <option value={30}>Last 30 days of data</option>
-              <option value={90}>Last 90 days of data</option>
-              <option value={365}>Last 12 months of data</option>
-            </select>
-          </label>
-        )}
-        {cats.length > 0 && (
-          <label>Chart style
-            <select value={chartStyle} onChange={(e) => set({ chartStyle: e.target.value as ChartStyle })}>
-              <option value="bar">Bars</option>
-              <option value="donut">Donut</option>
-              <option value="treemap">Treemap</option>
-            </select>
-          </label>
-        )}
-        <button type="button" className="btn btn-quiet" disabled={!anyFilter} onClick={() => set({ filters: {}, range: 0 })}>Clear filters</button>
+            </div>
+          )}
+          {cats.map((ci) => {
+            const c = cols[ci];
+            return (
+              <div key={c.name} className="dash-filter-group">
+                <span className="dash-filter-label">{c.name}</span>
+                <select value={config.filters[c.name] ?? ""} onChange={(e) => set({ filters: { ...config.filters, [c.name]: e.target.value } })}>
+                  <option value="">All</option>
+                  {c.top!.map(([v]) => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+            );
+          })}
+          {dateIdx >= 0 && (
+            <div className="dash-filter-group">
+              <span className="dash-filter-label">Period</span>
+              <select value={config.range} onChange={(e) => set({ range: +e.target.value })}>
+                <option value={0}>All dates</option>
+                <option value={30}>Last 30 days</option>
+                <option value={90}>Last 90 days</option>
+                <option value={365}>Last 12 months</option>
+              </select>
+            </div>
+          )}
+          {cats.length > 0 && (
+            <div className="dash-filter-group">
+              <span className="dash-filter-label">Chart style</span>
+              <select value={chartStyle} onChange={(e) => set({ chartStyle: e.target.value as ChartStyle })}>
+                <option value="bar">Bars</option>
+                <option value="donut">Donut</option>
+                <option value="treemap">Treemap</option>
+              </select>
+            </div>
+          )}
+          <button type="button" className="btn dash-clear-btn" disabled={!anyFilter} onClick={() => set({ filters: {}, range: 0 })}>
+            Clear filters
+          </button>
+        </aside>
+        <main className="dash-main">
+          {sub.n === 0 ? (
+            <p className="emptymsg">No rows match these filters.</p>
+          ) : (
+            <>
+              <div className="kpi-row">
+                {kpis.map((k) => (
+                  <KpiCard key={k.title} title={k.title} value={k.value} subtitle={k.subtitle} trend={k.trend} />
+                ))}
+              </div>
+              <div className="dgrid">
+                {cards.map((c, i) => (
+                  <article key={c.key} className={"dash-card" + (cards.length % 2 && i === 0 ? " wide" : "")}>
+                    <h3>{c.title}</h3>
+                    {c.node}
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+        </main>
       </div>
-
-      {sub.n === 0 ? (
-        <p className="emptymsg">No rows match these filters. Set one of them back to All.</p>
-      ) : (
-        <>
-          <div className="kpi-row">
-            {kpis.map((k) => (
-              <KpiCard key={k.title} title={k.title} value={k.value} subtitle={k.subtitle} trend={k.trend} />
-            ))}
-          </div>
-          <div className="dgrid">
-            {cards.map((c, i) => (
-              <article key={c.key} className={"panel dcard" + (cards.length % 2 && i === 0 ? " wide" : "")}>
-                <h3>{c.title}</h3>
-                {c.node}
-              </article>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }

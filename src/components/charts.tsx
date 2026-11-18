@@ -424,3 +424,54 @@ export function BarList({ items, label, format = fmt }: { items: [string, number
     </ChartBox>
   );
 }
+
+/* ---------- data table ---------- */
+
+export function DataTable({ data, rowHeader, colHeaders, label }: {
+  data: { label: string; values: number[]; total: number }[];
+  rowHeader: string;
+  colHeaders: string[];
+  label: string;
+}) {
+  const allValues = data.flatMap((r) => r.values);
+  const max = Math.max(...allValues, 1);
+  return (
+    <ChartBox label={label} className="chart-table">
+      {() => (
+        <div className="scroll">
+          <table className="dtable">
+            <thead>
+              <tr>
+                <th>{rowHeader}</th>
+                {colHeaders.map((h) => <th key={h}>{h}</th>)}
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <tr key={row.label}>
+                  <td className="dtable-rh">{row.label}</td>
+                  {row.values.map((v, i) => (
+                    <td key={i} className="dtable-cell" style={v > 0 ? {
+                      backgroundColor: `color-mix(in srgb, var(--accent) ${Math.round((v / max) * 45 + 10)}%, transparent)`
+                    } : undefined}>
+                      {fmt(v)}
+                    </td>
+                  ))}
+                  <td className="dtable-cell dtable-total">{fmt(row.total)}</td>
+                </tr>
+              ))}
+              <tr className="dtable-foot">
+                <td>Total</td>
+                {colHeaders.map((_, i) => (
+                  <td key={i}>{fmt(data.reduce((s, r) => s + r.values[i], 0))}</td>
+                ))}
+                <td>{fmt(data.reduce((s, r) => s + r.total, 0))}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </ChartBox>
+  );
+}

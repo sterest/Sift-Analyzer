@@ -289,4 +289,120 @@ table { border-collapse: collapse; font-size: 13px; }
 .rows td.empty { color: var(--muted); }
 .rows tbody tr:hover { background: var(--wash); }
 
+/* ── Power BI-style dashboard ── */
+html:has(.dash-page) { overflow-x: hidden; }
+
+.dash-page {
+  --bg: #162238;
+  --surface: #1c2d4f;
+  --ink: #e4eaf2;
+  --ink2: #a0b4d0;
+  --muted: #6b83a8;
+  --line: #2a4068;
+  --axis: #3a5080;
+  --accent: #3ea8c0;
+  --accent-ink: #5ec4d8;
+  --on-accent: #fff;
+  --wash: rgba(62, 168, 192, 0.15);
+  --pos: #4ecdc4;
+  --neg: #ff6b6b;
+  --mid: #2a3f63;
+  --ink-on-fill: #fff;
+  --bad: #ff6b6b;
+  --bad-bg: #3d1717;
+
+  width: 100vw;
+  margin-left: 50%;
+  transform: translateX(-50%);
+  min-height: 70vh;
+  background: var(--bg);
+  color: var(--ink);
+  padding-bottom: 40px;
+  color-scheme: dark;
+}
+
+.dash-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  background: #0f1a2e;
+  border-bottom: 2px solid var(--line);
+}
+.dash-head svg { color: var(--line); }
+.dash-head h2 { font-size: 18px; font-weight: 600; }
+
+.dash-body { display: flex; }
+
+.dash-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #0f1a2e;
+  border-right: 1px solid var(--line);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dash-filter-group { display: flex; flex-direction: column; gap: 4px; }
+.dash-filter-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted);
+}
+.dash-page select {
+  background: var(--surface); border-color: var(--axis); color: var(--ink);
+  font-size: 13px; padding: 6px 8px; border-radius: 6px;
+}
+.dash-page select:focus { border-color: var(--accent); outline: none; }
+
+.dash-clear-btn { margin-top: auto; color: var(--muted) !important; font-size: 13px !important; }
+.dash-clear-btn:hover { color: var(--ink2) !important; }
+
+.dash-main {
+  flex: 1; min-width: 0; padding: 20px 24px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+.dash-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+}
+.dash-card.wide { grid-column: 1 / -1; }
+.dash-card h3 { font-size: 13px; color: var(--ink2); font-weight: 500; }
+
+.dash-page .kpi-card { border-top: 3px solid var(--accent); }
+.dash-page .tip { border: 1px solid var(--axis); }
+
+/* Data table */
+.dtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dtable th {
+  text-align: left; padding: 8px 10px; font-size: 12px; font-weight: 600;
+  color: var(--muted); border-bottom: 2px solid var(--line); white-space: nowrap;
+}
+.dtable td {
+  padding: 6px 10px; border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  text-align: right; white-space: nowrap;
+}
+.dtable-rh { text-align: left !important; font-family: var(--sans) !important; font-weight: 500; }
+.dtable-cell { border-radius: 3px; }
+.dtable-total { font-weight: 600; }
+.dtable-foot td { font-weight: 600; border-top: 2px solid var(--axis); border-bottom: 0; padding-top: 8px; }
+
+@media (max-width: 760px) {
+  .dash-body { flex-direction: column; }
+  .dash-sidebar {
+    width: 100%; border-right: 0; border-bottom: 1px solid var(--line);
+    padding: 16px; flex-direction: row; flex-wrap: wrap; gap: 10px;
+  }
+  .dash-filter-group { flex: 1 1 140px; min-width: 0; }
+  .dash-clear-btn { margin-top: 0; }
+  .dash-main { padding: 16px; }
+}
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
