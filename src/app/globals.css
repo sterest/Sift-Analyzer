@@ -394,6 +394,31 @@ html:has(.dash-page) { overflow-x: hidden; }
 .dtable-total { font-weight: 600; }
 .dtable-foot td { font-weight: 600; border-top: 2px solid var(--axis); border-bottom: 0; padding-top: 8px; }
 
+/* Sparkline in KPI */
+.kpi-top { display: flex; align-items: center; gap: 8px; }
+.kpi-spark { flex-shrink: 0; opacity: 0.7; }
+
+/* Stacked bars */
+.stacked-bars { display: flex; flex-direction: column; gap: 8px; }
+.stacked-row { display: grid; grid-template-columns: minmax(70px, max-content) minmax(40px, 1fr) max-content; gap: 6px 10px; align-items: center; }
+.stacked-label { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.stacked-track { height: 22px; display: flex; min-width: 0; border-radius: 0 4px 4px 0; overflow: hidden; }
+.stacked-seg { display: block; height: 100%; min-width: 2px; transition: filter 0.15s; }
+.stacked-seg:hover { filter: brightness(1.2); }
+.stacked-val { font-family: var(--mono); font-size: 12px; color: var(--ink2); text-align: right; }
+.stacked-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+
+/* Cross-filter clickable */
+.clickable { cursor: pointer; }
+.clickable:hover { opacity: 0.85; }
+
+/* Export button */
+.dash-export-btn { margin-left: auto; font-size: 13px !important; padding: 6px 14px !important; }
+.dash-page .dash-export-btn {
+  background: transparent; border-color: var(--axis); color: var(--ink2);
+}
+.dash-page .dash-export-btn:hover { color: var(--ink); border-color: var(--accent); }
+
 @media (max-width: 760px) {
   .dash-body { flex-direction: column; }
   .dash-sidebar {
@@ -403,6 +428,22 @@ html:has(.dash-page) { overflow-x: hidden; }
   .dash-filter-group { flex: 1 1 140px; min-width: 0; }
   .dash-clear-btn { margin-top: 0; }
   .dash-main { padding: 16px; }
+}
+
+/* Print */
+@media print {
+  .sitehead, .dash-sidebar, .dash-export-btn, .sitefoot { display: none !important; }
+  .dash-page {
+    width: 100% !important; margin: 0 !important; transform: none !important;
+    --bg: #fff; --surface: #fff; --ink: #000; --ink2: #333; --muted: #666;
+    --line: #ddd; --axis: #ccc; --accent: #2a78d6; color-scheme: light;
+    padding-bottom: 0;
+  }
+  .dash-head { background: #fff !important; color: #000; border-color: #ddd; }
+  .dash-body { flex-direction: column; }
+  .dash-main { padding: 10px 0; }
+  .dash-card { break-inside: avoid; border-color: #ddd; }
+  .kpi-card { break-inside: avoid; }
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

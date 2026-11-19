@@ -210,7 +210,7 @@ const DONUT_COLORS = [
   "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1",
 ];
 
-export function DonutChart({ items, label, format: fmtFn = fmt }: { items: [string, number][]; label: string; format?: (v: number) => string }) {
+export function DonutChart({ items, label, format: fmtFn = fmt, onSelect }: { items: [string, number][]; label: string; format?: (v: number) => string; onSelect?: (value: string) => void }) {
   if (!items.length) return <p className="note">No data.</p>;
   const total = items.reduce((s, e) => s + Math.abs(e[1]), 0) || 1;
   return (
@@ -239,7 +239,8 @@ export function DonutChart({ items, label, format: fmtFn = fmt }: { items: [stri
             <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, maxWidth: "100%" }}>
               {arcs.map((a, i) => (
                 <path key={i} d={a.d} fill={a.color} stroke="var(--surface)" strokeWidth="2"
-                  onPointerMove={(e) => show(e, [a.k, `${fmtFn(a.v)} (${(a.pct * 100).toFixed(1)}%)`])} onPointerLeave={hide} style={{ cursor: "default" }} />
+                  onClick={onSelect ? () => onSelect(a.k) : undefined}
+                  onPointerMove={(e) => show(e, [a.k, `${fmtFn(a.v)} (${(a.pct * 100).toFixed(1)}%)`])} onPointerLeave={hide} style={{ cursor: onSelect ? "pointer" : "default" }} />
               ))}
               <text x={cx} y={cy - 6} textAnchor="middle" style={{ fill: "var(--ink)", fontSize: 18, fontWeight: 600, fontFamily: "var(--sans)" }}>{fmtFn(total)}</text>
               <text x={cx} y={cy + 12} textAnchor="middle" style={{ fill: "var(--muted)", fontSize: 11 }}>total</text>
@@ -308,11 +309,26 @@ export function AreaChart({ series, label, height }: { series: TimeSeries; label
 
 /* ---------- KPI card ---------- */
 
-export function KpiCard({ title, value, subtitle, trend }: { title: string; value: string; subtitle?: string; trend?: { pct: number; up: boolean } }) {
+function Sparkline({ data }: { data: number[] }) {
+  const W = 80, H = 24;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * W},${H - ((v - min) / range) * (H - 4) - 2}`).join(" ");
+  return (
+    <svg className="kpi-spark" viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
+      <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function KpiCard({ title, value, subtitle, trend, spark }: { title: string; value: string; subtitle?: string; trend?: { pct: number; up: boolean }; spark?: number[] }) {
   return (
     <div className="kpi-card">
       <span className="kpi-title">{title}</span>
-      <span className="kpi-value">{value}</span>
+      <div className="kpi-top">
+        <span className="kpi-value">{value}</span>
+        {spark && spark.length > 1 && <Sparkline data={spark} />}
+      </div>
       {trend && (
         <span className={`kpi-trend ${trend.up ? "kpi-up" : "kpi-down"}`}>
           {trend.up ? "▲" : "▼"} {Math.abs(trend.pct).toFixed(1)}%
@@ -323,9 +339,88 @@ export function KpiCard({ title, value, subtitle, trend }: { title: string; valu
   );
 }
 
+/* ---------- gauge ---------- */
+
+export function GaugeChart({ value, min, max, label, format: fmtFn = fmt }: { value: number; min: number; max: number; label: string; format?: (v: number) => string }) {
+  const frac = Math.max(0, Math.min(1, (value - min) / (max - min || 1)));
+  const W = 220, H = 140;
+  const cx = W / 2, cy = H - 16;
+  const R = 72;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const pt = (a: number, r: number): [number, number] => [cx + r * Math.cos(toRad(a)), cy - r * Math.sin(toRad(a))];
+  const sweepDeg = 240;
+  const needleDeg = 210 - frac * sweepDeg;
+  const [sx, sy] = pt(210, R);
+  const [ex, ey] = pt(-30, R);
+  const [fx, fy] = pt(needleDeg, R);
+  const filledLarge = frac * sweepDeg > 180 ? 1 : 0;
+  const [nx, ny] = pt(needleDeg, R * 0.82);
+  const bgArc = `M${sx.toFixed(1)},${sy.toFixed(1)} A${R},${R} 0 1 1 ${ex.toFixed(1)},${ey.toFixed(1)}`;
+  const fillArc = frac > 0.001 ? `M${sx.toFixed(1)},${sy.toFixed(1)} A${R},${R} 0 ${filledLarge} 1 ${fx.toFixed(1)},${fy.toFixed(1)}` : "";
+  return (
+    <ChartBox label={label} className="chart-gauge">
+      {() => (
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, maxWidth: "100%", height: "auto" }}>
+          <path d={bgArc} fill="none" stroke="var(--axis)" strokeWidth="14" strokeLinecap="round" />
+          {fillArc && <path d={fillArc} fill="none" stroke="var(--accent)" strokeWidth="14" strokeLinecap="round" />}
+          <line x1={cx} y1={cy} x2={nx.toFixed(1)} y2={ny.toFixed(1)} stroke="var(--ink)" strokeWidth="2.5" strokeLinecap="round" />
+          <circle cx={cx} cy={cy} r="5" fill="var(--ink)" />
+          <text x={cx} y={cy + 22} textAnchor="middle" style={{ fill: "var(--ink)", fontSize: 16, fontWeight: 600, fontFamily: "var(--sans)" }}>{fmtFn(value)}</text>
+          <text x={sx.toFixed(1)} y={(sy + 16).toFixed(1)} textAnchor="middle" style={{ fill: "var(--muted)", fontSize: 10 }}>{fmtFn(min)}</text>
+          <text x={ex.toFixed(1)} y={(ey + 16).toFixed(1)} textAnchor="middle" style={{ fill: "var(--muted)", fontSize: 10 }}>{fmtFn(max)}</text>
+        </svg>
+      )}
+    </ChartBox>
+  );
+}
+
+/* ---------- stacked bar ---------- */
+
+export function StackedBarChart({ groups, series, label, format: fmtFn = fmt, onSelect }: {
+  groups: string[]; series: { name: string; values: number[] }[]; label: string;
+  format?: (v: number) => string; onSelect?: (group: string) => void;
+}) {
+  const totals = groups.map((_, gi) => series.reduce((s, ser) => s + Math.abs(ser.values[gi]), 0));
+  const max = Math.max(...totals, 1);
+  return (
+    <ChartBox label={label} className="chart-stacked">
+      {(_w, show, hide) => (
+        <div className="stacked-bars">
+          {groups.map((g, gi) => (
+            <div key={g} className={"stacked-row" + (onSelect ? " clickable" : "")}
+              onClick={onSelect ? () => onSelect(g) : undefined}>
+              <span className="stacked-label" title={g}>{g}</span>
+              <div className="stacked-track">
+                {series.map((s, si) => {
+                  const pct = (Math.abs(s.values[gi]) / max) * 100;
+                  return pct > 0 ? (
+                    <span key={si} className="stacked-seg"
+                      style={{ width: `${pct}%`, background: DONUT_COLORS[si % DONUT_COLORS.length] }}
+                      onPointerMove={(e) => show(e, [g, `${s.name}: ${fmtFn(s.values[gi])}`])}
+                      onPointerLeave={hide} />
+                  ) : null;
+                })}
+              </div>
+              <span className="stacked-val">{fmtFn(totals[gi])}</span>
+            </div>
+          ))}
+          <div className="stacked-legend">
+            {series.map((s, si) => (
+              <span key={si} className="donut-leg-row">
+                <span className="donut-swatch" style={{ background: DONUT_COLORS[si % DONUT_COLORS.length] }} />
+                <span className="donut-lbl">{s.name}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </ChartBox>
+  );
+}
+
 /* ---------- treemap ---------- */
 
-export function TreemapChart({ items, label, format: fmtFn = fmt }: { items: [string, number][]; label: string; format?: (v: number) => string }) {
+export function TreemapChart({ items, label, format: fmtFn = fmt, onSelect }: { items: [string, number][]; label: string; format?: (v: number) => string; onSelect?: (value: string) => void }) {
   if (!items.length) return <p className="note">No data.</p>;
   const total = items.reduce((s, e) => s + Math.abs(e[1]), 0) || 1;
   const sorted = [...items].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
@@ -340,7 +435,7 @@ export function TreemapChart({ items, label, format: fmtFn = fmt }: { items: [st
               const color = DONUT_COLORS[i % DONUT_COLORS.length];
               const minDim = Math.min(r.w, r.h);
               return (
-                <g key={i} onPointerMove={(e) => show(e, [r.k, `${fmtFn(r.v)} (${(r.frac * 100).toFixed(1)}%)`])} onPointerLeave={hide} style={{ cursor: "default" }}>
+                <g key={i} onClick={onSelect ? () => onSelect(r.k) : undefined} onPointerMove={(e) => show(e, [r.k, `${fmtFn(r.v)} (${(r.frac * 100).toFixed(1)}%)`])} onPointerLeave={hide} style={{ cursor: onSelect ? "pointer" : "default" }}>
                   <rect x={r.x + 1} y={r.y + 1} width={Math.max(0, r.w - 2)} height={Math.max(0, r.h - 2)} rx="4" fill={color} opacity="0.85" />
                   {minDim > 36 && (
                     <text x={r.x + r.w / 2} y={r.y + r.h / 2 - (minDim > 50 ? 4 : 0)} textAnchor="middle" dominantBaseline="central"
@@ -405,7 +500,7 @@ function squarify(data: { k: string; v: number; frac: number }[], W: number, H: 
 
 /* ---------- ranked bars ---------- */
 
-export function BarList({ items, label, format = fmt }: { items: [string, number][]; label: string; format?: (v: number) => string }) {
+export function BarList({ items, label, format = fmt, onSelect }: { items: [string, number][]; label: string; format?: (v: number) => string; onSelect?: (value: string) => void }) {
   if (!items.length) return <p className="note">No rows have both values.</p>;
   const max = Math.max(...items.map((e) => Math.abs(e[1]))) || 1;
   return (
@@ -413,7 +508,7 @@ export function BarList({ items, label, format = fmt }: { items: [string, number
       {(_w, show, hide) => (
         <div className="hbars">
           {items.map(([k, v]) => (
-            <div key={k} className="hbar-row" onPointerMove={(e) => show(e, [k, format(v)])} onPointerLeave={hide}>
+            <div key={k} className={"hbar-row" + (onSelect ? " clickable" : "")} onClick={onSelect ? () => onSelect(k) : undefined} onPointerMove={(e) => show(e, [k, format(v)])} onPointerLeave={hide}>
               <span className="lab" title={k}>{k}</span>
               <span className="track"><span className="fill" style={{ width: `${(Math.abs(v) / max) * 100}%` }} /></span>
               <span className="val">{format(v)}</span>

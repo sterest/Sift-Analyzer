@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { analyze, measureCols, pearson, pickMeasure, type Column, type Dataset } from "@/lib/analyze";
 import { groupByCategory, groupByTime } from "@/lib/aggregate";
 import { fmt, MONTHS, pct } from "@/lib/format";
-import { AreaChart, BarList, DataTable, DonutChart, HistogramChart, KpiCard, LineChart, ScatterChart, TreemapChart } from "./charts";
+import { AreaChart, BarList, DataTable, DonutChart, GaugeChart, HistogramChart, KpiCard, LineChart, ScatterChart, StackedBarChart, TreemapChart } from "./charts";
 
 export type DashAgg = "sum" | "mean" | "median";
 export type ChartStyle = "bar" | "donut" | "treemap";
@@ -46,6 +46,13 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
   const dateIdx = useMemo(() => cols.findIndex((c) => c.type === "date" && c.count > 0), [cols]);
   const measureIdx = config.measure == null ? -1 : cols.findIndex((c) => c.name === config.measure);
   const set = (patch: Partial<DashConfig>) => onChange({ ...config, ...patch });
+  const dashRef = useRef<HTMLDivElement>(null);
+
+  // Cross-filter: clicking a chart element toggles that category filter
+  const handleCrossFilter = (colIdx: number, value: string) => {
+    const name = cols[colIdx].name;
+    set({ filters: { ...config.filters, [name]: config.filters[name] === value ? "" : value } });
+  };
 
   // Rows that pass the filters, re-profiled so every figure below reflects them.
   const sub = useMemo(() => {
@@ -70,8 +77,9 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
   const hasM = !!m && m.count > 0;
   const what = m ? `${AGG_WORD[config.agg]} ${m.name}` : "Number of rows";
 
-  // Latest month against the one before it.
+  // Monthly series for sparklines + delta
   let delta: { text: string; up: boolean | null } | null = null;
+  let monthlySeries: number[] = [];
   if (sd && sd.count) {
     const g = new Map<number, number>();
     for (let i = 0; i < sd.values.length; i++) {
@@ -81,6 +89,7 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
       g.set(monthKey(t), (g.get(monthKey(t)) ?? 0) + v);
     }
     const ms = Array.from(g).sort((a, b) => a[0] - b[0]);
+    monthlySeries = ms.map(([, v]) => v);
     if (ms.length >= 2) {
       const [a, b] = [ms[ms.length - 1], ms[ms.length - 2]];
       const last = new Date(sd.max!);
@@ -97,13 +106,14 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
 
   const chartStyle = config.chartStyle ?? "bar";
 
-  const kpis: { title: string; value: string; subtitle?: string; trend?: { pct: number; up: boolean } }[] = [
+  const kpis: { title: string; value: string; subtitle?: string; trend?: { pct: number; up: boolean }; spark?: number[] }[] = [
     { title: "Rows", value: fmt(sub.n), subtitle: sub.n < rows.length ? `of ${fmt(rows.length)} total` : "the whole file" },
   ];
   if (hasM) {
     const totalVal = m!.mean! * m!.count;
     kpis.push(
       { title: `Total ${m!.name}`, value: fmt(totalVal), subtitle: delta?.text ?? `across ${fmt(m!.count)} rows`,
+        spark: monthlySeries.length > 1 ? monthlySeries : undefined,
         ...(delta?.up != null ? { trend: { pct: parseFloat(delta.text.match(/([0-9.]+)%/)?.[1] ?? "0"), up: delta.up } } : {}) },
       { title: `Average ${m!.name}`, value: fmt(m!.mean), subtitle: "per row" },
       { title: `Median ${m!.name}`, value: fmt(m!.median), subtitle: "midpoint" },
@@ -124,13 +134,20 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
       const catData = groupByCategory(sub.cols[ci], m, config.agg, chartStyle === "treemap" ? 12 : 6);
       const t = `${what} by ${sub.cols[ci].name}`;
       if (chartStyle === "donut") {
-        cards.push({ key: "cat-" + ci, title: t, node: <DonutChart items={catData.items} label={t} /> });
+        cards.push({ key: "cat-" + ci, title: t, node: <DonutChart items={catData.items} label={t} onSelect={(v) => handleCrossFilter(ci, v)} /> });
       } else if (chartStyle === "treemap") {
-        cards.push({ key: "cat-" + ci, title: t, node: <TreemapChart items={catData.items} label={t} /> });
+        cards.push({ key: "cat-" + ci, title: t, node: <TreemapChart items={catData.items} label={t} onSelect={(v) => handleCrossFilter(ci, v)} /> });
       } else {
-        cards.push({ key: "cat-" + ci, title: t, node: <BarList items={catData.items} label={t} /> });
+        cards.push({ key: "cat-" + ci, title: t, node: <BarList items={catData.items} label={t} onSelect={(v) => handleCrossFilter(ci, v)} /> });
       }
     });
+
+    // Gauge for average measure
+    if (hasM && m!.min != null && m!.max != null) {
+      const gTitle = `Average ${m!.name}`;
+      cards.push({ key: "gauge", title: gTitle, node: <GaugeChart value={m!.mean!} min={m!.min!} max={m!.max!} label={gTitle} /> });
+    }
+
     if (hasM && m!.unique > 1) {
       cards.push({ key: "hist", title: `How ${m!.name} is spread (rows per range)`, node: <HistogramChart col={m!} height={220} /> });
       let best: { c: Column; r: number } | null = null;
@@ -141,7 +158,8 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
       }
       if (best) cards.push({ key: "scatter", title: `${m!.name} against ${best.c.name} (r = ${best.r.toFixed(2)})`, node: <ScatterChart xCol={best.c} yCol={m!} height={220} /> });
     }
-    // Cross-tab data table when two category columns are visible
+
+    // Stacked bar + cross-tab when two category columns are visible
     const freeCats = cats.filter((ci) => !config.filters[cols[ci].name]);
     if (freeCats.length >= 2) {
       const c1 = sub.cols[freeCats[0]], c2 = sub.cols[freeCats[1]];
@@ -154,6 +172,13 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
         if (typeof r !== "string" || typeof c !== "string" || typeof v !== "number") continue;
         if (r in grid && c in grid[r]) grid[r][c] += v;
       }
+
+      // Stacked bar
+      const stackSeries = colVals.map((cv) => ({ name: cv, values: rowVals.map((rv) => grid[rv][cv]) }));
+      const sTitle = `${what} by ${c1.name}, by ${c2.name}`;
+      cards.push({ key: "stacked", title: sTitle, node: <StackedBarChart groups={rowVals} series={stackSeries} label={sTitle} onSelect={(g) => handleCrossFilter(freeCats[0], g)} /> });
+
+      // Cross-tab data table
       const tbl = rowVals.map((rv) => ({ label: rv, values: colVals.map((cv) => grid[rv][cv]), total: colVals.reduce((s, cv) => s + grid[rv][cv], 0) }));
       const tTitle = `${what} by ${c1.name} & ${c2.name}`;
       cards.push({ key: "pivot", title: tTitle, node: <DataTable data={tbl} rowHeader={c1.name} colHeaders={colVals} label={tTitle} /> });
@@ -162,8 +187,18 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
 
   const anyFilter = Object.values(config.filters).some((v) => v) || config.range > 0;
 
+  const handleExport = () => {
+    const el = dashRef.current;
+    if (!el) return;
+    el.classList.add("dash-printing");
+    requestAnimationFrame(() => {
+      window.print();
+      el.classList.remove("dash-printing");
+    });
+  };
+
   return (
-    <div className="dash-page">
+    <div className="dash-page" ref={dashRef}>
       <header className="dash-head">
         <svg width="28" height="28" viewBox="0 0 512 512" aria-hidden="true">
           <rect width="512" height="512" rx="112" fill="currentColor"/>
@@ -175,6 +210,7 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
           <rect x="205" y="428" width="205" height="36" rx="18" fill="#fff" opacity=".45"/>
         </svg>
         <h2>{ds.name}</h2>
+        <button type="button" className="btn dash-export-btn" onClick={handleExport}>Export PDF</button>
       </header>
       <div className="dash-body">
         <aside className="dash-sidebar">
@@ -237,7 +273,7 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
             <>
               <div className="kpi-row">
                 {kpis.map((k) => (
-                  <KpiCard key={k.title} title={k.title} value={k.value} subtitle={k.subtitle} trend={k.trend} />
+                  <KpiCard key={k.title} title={k.title} value={k.value} subtitle={k.subtitle} trend={k.trend} spark={k.spark} />
                 ))}
               </div>
               <div className="dgrid">
