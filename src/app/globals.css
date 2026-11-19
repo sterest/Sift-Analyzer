@@ -292,25 +292,8 @@ table { border-collapse: collapse; font-size: 13px; }
 /* ── Power BI-style dashboard ── */
 html:has(.dash-page) { overflow-x: hidden; }
 
+/* Dashboard layout (shared across all themes) */
 .dash-page {
-  --bg: #162238;
-  --surface: #1c2d4f;
-  --ink: #e4eaf2;
-  --ink2: #a0b4d0;
-  --muted: #6b83a8;
-  --line: #2a4068;
-  --axis: #3a5080;
-  --accent: #3ea8c0;
-  --accent-ink: #5ec4d8;
-  --on-accent: #fff;
-  --wash: rgba(62, 168, 192, 0.15);
-  --pos: #4ecdc4;
-  --neg: #ff6b6b;
-  --mid: #2a3f63;
-  --ink-on-fill: #fff;
-  --bad: #ff6b6b;
-  --bad-bg: #3d1717;
-
   width: 100vw;
   margin-left: 50%;
   transform: translateX(-50%);
@@ -318,6 +301,68 @@ html:has(.dash-page) { overflow-x: hidden; }
   background: var(--bg);
   color: var(--ink);
   padding-bottom: 40px;
+}
+
+/* Theme: Navy (default) */
+.dash-page, .dash-page.theme-navy {
+  --bg: #162238; --surface: #1c2d4f; --ink: #e4eaf2; --ink2: #a0b4d0;
+  --muted: #6b83a8; --line: #2a4068; --axis: #3a5080; --accent: #3ea8c0;
+  --accent-ink: #5ec4d8; --on-accent: #fff; --wash: rgba(62, 168, 192, 0.15);
+  --pos: #4ecdc4; --neg: #ff6b6b; --mid: #2a3f63; --ink-on-fill: #fff;
+  --bad: #ff6b6b; --bad-bg: #3d1717; --head-bg: #0f1a2e;
+  color-scheme: dark;
+}
+
+/* Theme: Light */
+.dash-page.theme-light {
+  --bg: #f4f6f9; --surface: #ffffff; --ink: #1a1a2e; --ink2: #4a4a6a;
+  --muted: #8888a0; --line: #dfe3ea; --axis: #c0c8d4; --accent: #4a7cf7;
+  --accent-ink: #3360d4; --on-accent: #fff; --wash: rgba(74, 124, 247, 0.1);
+  --pos: #22a06b; --neg: #e34848; --mid: #eef1f5; --ink-on-fill: #1a1a2e;
+  --bad: #c22f2f; --bad-bg: #fbe4e2; --head-bg: #ffffff;
+  color-scheme: light;
+}
+.dash-page.theme-light .dash-head { border-bottom-color: #dfe3ea; }
+.dash-page.theme-light .dash-sidebar { border-right-color: #dfe3ea; }
+.dash-page.theme-light .dash-card { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+
+/* Theme: Midnight */
+.dash-page.theme-midnight {
+  --bg: #0c0c14; --surface: #16161f; --ink: #e8e8f0; --ink2: #a8a8c0;
+  --muted: #686888; --line: #24243a; --axis: #3a3a54; --accent: #a78bfa;
+  --accent-ink: #c4b5fd; --on-accent: #fff; --wash: rgba(167, 139, 250, 0.12);
+  --pos: #34d399; --neg: #f87171; --mid: #1e1e30; --ink-on-fill: #fff;
+  --bad: #f87171; --bad-bg: #3d1717; --head-bg: #08080e;
+  color-scheme: dark;
+}
+
+/* Theme: Emerald */
+.dash-page.theme-emerald {
+  --bg: #0f1f1a; --surface: #152e25; --ink: #d8f0e6; --ink2: #94c8ae;
+  --muted: #5a9a7a; --line: #1e4035; --axis: #2d5a48; --accent: #34d399;
+  --accent-ink: #6ee7b7; --on-accent: #0f1f1a; --wash: rgba(52, 211, 153, 0.12);
+  --pos: #34d399; --neg: #fb7185; --mid: #1a3a2e; --ink-on-fill: #fff;
+  --bad: #fb7185; --bad-bg: #3d1720; --head-bg: #091410;
+  color-scheme: dark;
+}
+
+/* Theme: Sunset */
+.dash-page.theme-sunset {
+  --bg: #1c1410; --surface: #2a1f18; --ink: #f0e6da; --ink2: #c8a888;
+  --muted: #9a7a5a; --line: #3a2a1e; --axis: #5a4030; --accent: #f59e0b;
+  --accent-ink: #fbbf24; --on-accent: #1c1410; --wash: rgba(245, 158, 11, 0.12);
+  --pos: #34d399; --neg: #fb7185; --mid: #2e2218; --ink-on-fill: #fff;
+  --bad: #fb7185; --bad-bg: #3d1720; --head-bg: #120e0a;
+  color-scheme: dark;
+}
+
+/* Theme: Rose */
+.dash-page.theme-rose {
+  --bg: #1a1018; --surface: #281e28; --ink: #f0e0ee; --ink2: #c8a0c0;
+  --muted: #8a6080; --line: #3a2238; --axis: #543050; --accent: #f472b6;
+  --accent-ink: #f9a8d4; --on-accent: #fff; --wash: rgba(244, 114, 182, 0.12);
+  --pos: #34d399; --neg: #fb7185; --mid: #2e1a2c; --ink-on-fill: #fff;
+  --bad: #fb7185; --bad-bg: #3d1720; --head-bg: #100a0e;
   color-scheme: dark;
 }
 
@@ -326,7 +371,7 @@ html:has(.dash-page) { overflow-x: hidden; }
   align-items: center;
   gap: 12px;
   padding: 14px 24px;
-  background: #0f1a2e;
+  background: var(--head-bg);
   border-bottom: 2px solid var(--line);
 }
 .dash-head svg { color: var(--line); }
@@ -337,7 +382,7 @@ html:has(.dash-page) { overflow-x: hidden; }
 .dash-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: #0f1a2e;
+  background: var(--head-bg);
   border-right: 1px solid var(--line);
   padding: 20px 16px;
   display: flex;

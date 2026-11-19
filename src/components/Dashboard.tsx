@@ -10,6 +10,9 @@ export type DashAgg = "sum" | "mean" | "median";
 export type ChartStyle = "bar" | "donut" | "treemap";
 
 /** A dashboard view, stored by column name so it survives re-uploads of the same file. */
+export type DashTheme = "navy" | "light" | "midnight" | "emerald" | "sunset" | "rose";
+
+/** A dashboard view, stored by column name so it survives re-uploads of the same file. */
 export interface DashConfig {
   measure: string | null;
   agg: DashAgg;
@@ -17,6 +20,7 @@ export interface DashConfig {
   /** Only keep the last N days of data; 0 keeps everything. */
   range: number;
   chartStyle?: ChartStyle;
+  theme?: DashTheme;
 }
 
 const AGG_WORD: Record<DashAgg, string> = { sum: "Total", mean: "Average", median: "Median" };
@@ -105,6 +109,7 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
   }
 
   const chartStyle = config.chartStyle ?? "bar";
+  const theme = config.theme ?? "navy";
 
   const kpis: { title: string; value: string; subtitle?: string; trend?: { pct: number; up: boolean }; spark?: number[] }[] = [
     { title: "Rows", value: fmt(sub.n), subtitle: sub.n < rows.length ? `of ${fmt(rows.length)} total` : "the whole file" },
@@ -198,7 +203,7 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
   };
 
   return (
-    <div className="dash-page" ref={dashRef}>
+    <div className={`dash-page theme-${theme}`} ref={dashRef}>
       <header className="dash-head">
         <svg width="28" height="28" viewBox="0 0 512 512" aria-hidden="true">
           <rect width="512" height="512" rx="112" fill="currentColor"/>
@@ -262,6 +267,17 @@ export function Dashboard({ ds, config, onChange }: { ds: Dataset; config: DashC
               </select>
             </div>
           )}
+          <div className="dash-filter-group">
+            <span className="dash-filter-label">Theme</span>
+            <select value={theme} onChange={(e) => set({ theme: e.target.value as DashTheme })}>
+              <option value="navy">Navy</option>
+              <option value="light">Light</option>
+              <option value="midnight">Midnight</option>
+              <option value="emerald">Emerald</option>
+              <option value="sunset">Sunset</option>
+              <option value="rose">Rose</option>
+            </select>
+          </div>
           <button type="button" className="btn dash-clear-btn" disabled={!anyFilter} onClick={() => set({ filters: {}, range: 0 })}>
             Clear filters
           </button>
